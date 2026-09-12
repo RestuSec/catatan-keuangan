@@ -87,6 +87,8 @@
   th{text-align:left;color:var(--muted);font-weight:500;font-size:12px;padding:8px 10px;border-bottom:1px solid var(--card2)}
   td{padding:12px 10px;border-bottom:1px solid var(--card2);vertical-align:middle}
   tr:last-child td{border-bottom:none}
+  .trx-date td{color:var(--muted);font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:13px 10px 5px;background:transparent;border-bottom:none}
+  .trx-date td .tdot{color:var(--muted)}
   .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
   .badge.masuk{background:rgba(34,197,94,.15);color:var(--green)}
   .badge.keluar{background:rgba(239,68,68,.15);color:var(--red)}
@@ -174,6 +176,7 @@
       <h2>Transaksi</h2>
       <div class="toolbar">
         <button class="btn-primary" onclick="modalTransaksi()">+ Catat Transaksi</button>
+        <button class="btn-danger" onclick="hapusSemuaTransaksi()">Hapus Semua</button>
         <select id="filterTipe" onchange="renderTransaksi()">
           <option value="semua">Semua</option>
           <option value="masuk">Pemasukan</option>
@@ -738,24 +741,30 @@ function modalTransaksi(id){
     el('fLokasi').innerHTML = lokasiOptions(t && t.lokasi);
   }
 }
-function renderTransaksi(){
-  const tipe = el('filterTipe').value;
-  const q = el('cariTransaksi').value.toLowerCase();
-  let daftar = S.transaksi;
-  if (tipe !== 'semua') daftar = daftar.filter(t => t.tipe === tipe);
-  if (q) daftar = daftar.filter(t => (t.kategori + ' ' + t.lokasi + ' ' + t.nama + ' ' + t.catatan).toLowerCase().includes(q));
-  daftar = [...daftar].sort((a,b) => b.tanggal.localeCompare(a.tanggal) || b.catatan.localeCompare(a.catatan));
-  el('txBody').innerHTML = daftar.length ? daftar.map(t => {
-    const aset = t.tipe === 'beli' || t.tipe === 'jual';
-    const naik = t.tipe === 'masuk' || t.tipe === 'jual';
-    const nm = aset ? t.nama : t.kategori;
-    let wr;
-    if (!aset) wr = warnaNama(t.kategori, t.tipe === 'masuk' ? S.settings.kategori.masuk : S.settings.kategori.keluar);
-    else if (t.tipe === 'beli') wr = (asetByNama(t.nama) || {}).warna || S.settings.accent;
-    else wr = '#eab308';
-    const sub = aset ? ('Portofolio' + (t.catatan ? ' · ' + t.catatan : '')) : (t.lokasi + (t.catatan ? ' · ' + t.catatan : ''));
-    const cls = t.tipe === 'masuk' ? 'amount-pos' : (t.tipe === 'jual' ? 'amount-pos' : (t.tipe === 'beli' ? 'amount-blue' : 'amount-neg'));
-    return `<tr>
+function keyTanggal(d){
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function tanggalRow(tanggal){
+  const d = new Date(tanggal);
+  let label = d.toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const skrg = new Date();
+  const hariIni = keyTanggal(skrg);
+  const kemarin = keyTanggal(new Date(skrg.getFullYear(), skrg.getMonth(), skrg.getDate() - 1));
+  if (keyTanggal(d) === hariIni) label = 'Hari ini — ' + label;
+  else if (keyTanggal(d) === kemarin) label = 'Kemarin — ' + label;
+  return `<tr class="trx-date"><td colspan="5">${label}</td></tr>`;
+}
+function transaksiRow(t){
+  const aset = t.tipe === 'beli' || t.tipe === 'jual';
+  const naik = t.tipe === 'masuk' || t.tipe === 'jual';
+  const nm = aset ? t.nama : t.kategori;
+  let wr;
+  if (!aset) wr = warnaNama(t.kategori, t.tipe === 'masuk' ? S.settings.kategori.masuk : S.settings.kategori.keluar);
+  else if (t.tipe === 'beli') wr = (asetByNama(t.nama) || {}).warna || S.settings.accent;
+  else wr = '#eab308';
+  const sub = aset ? ('Portofolio' + (t.catatan ? ' · ' + t.catatan : '')) : (t.lokasi + (t.catatan ? ' · ' + t.catatan : ''));
+  const cls = t.tipe === 'masuk' ? 'amount-pos' : (t.tipe === 'jual' ? 'amount-pos' : (t.tipe === 'beli' ? 'amount-blue' : 'amount-neg'));
+  return `<tr>
       <td><span class="kategori-txt"><span class="dot" style="background:${wr}"></span><span class="asset-name">${esc(nm)}</span></span><div class="asset-sub">${esc(sub)}</div></td>
       <td><span class="badge ${t.tipe}">${TIPE_LABEL[t.tipe]}</span></td>
       <td style="color:var(--muted)">${t.tanggal}</td>
@@ -765,11 +774,31 @@ function renderTransaksi(){
         <button class="btn-danger btn-sm" onclick="hapusTransaksi('${t.id}')">✕</button>
       </div></td>
     </tr>`;
-  }).join('') : '<tr><td colspan="5" class="empty">Tidak ada transaksi</td></tr>';
+}
+function renderTransaksi(){
+  const tipe = el('filterTipe').value;
+  const q = el('cariTransaksi').value.toLowerCase();
+  let daftar = S.transaksi;
+  if (tipe !== 'semua') daftar = daftar.filter(t => t.tipe === tipe);
+  if (q) daftar = daftar.filter(t => (t.kategori + ' ' + t.lokasi + ' ' + t.nama + ' ' + t.catatan).toLowerCase().includes(q));
+  if (!daftar.length) { el('txBody').innerHTML = '<tr><td colspan="5" class="empty">Tidak ada transaksi</td></tr>'; return; }
+  daftar = [...daftar].sort((a,b) => b.tanggal.localeCompare(a.tanggal));
+  const rows = [];
+  let tglAktif = null;
+  daftar.forEach(t => {
+    if (t.tanggal !== tglAktif) { tglAktif = t.tanggal; rows.push(tanggalRow(t.tanggal)); }
+    rows.push(transaksiRow(t));
+  });
+  el('txBody').innerHTML = rows.join('');
 }
 function hapusTransaksi(id){
   if (!confirm('Hapus transaksi ini?')) return;
   S.transaksi = S.transaksi.filter(t => t.id !== id);
+  simpan(); render();
+}
+function hapusSemuaTransaksi(){
+  if (!confirm('Hapus SEMUA transaksi?\n\nData kas, modal aset & grafik akan terhapus dan dihitung ulang dari nol. Tindakan ini tidak bisa dibatalkan.')) return;
+  S.transaksi = [];
   simpan(); render();
 }
 
