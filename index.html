@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catatan Keuangan</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root{
+    --bg:#0f1117;
+    --card:#1a1d29;
+    --card2:#232735;
+    --text:#e8eaf0;
+    --muted:#8b90a3;
+    --accent:#4f8cff;
+    --green:#22c55e;
+    --red:#ef4444;
+    --yellow:#eab308;
+    --purple:#a855f7;
+    --radius:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',system-ui,sans-serif}
+  body{background:var(--bg);color:var(--text);min-height:100vh}
+  .wrap{max-width:1200px;margin:0 auto;padding:20px}
+
+  /* HEADER + TABS */
+  header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px}
+  h1{font-size:24px;font-weight:700}
+  h1 span{color:var(--accent)}
+  .header-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px}
+  .tabs button{background:var(--card2);border:1px solid transparent;border-radius:12px;padding:9px 16px;font-size:14px;font-weight:600}
+  .tabs button.aktif{background:var(--accent);color:#fff}
+  button{cursor:pointer;border:none;border-radius:10px;padding:10px 16px;font-size:14px;font-weight:600;transition:.2s;font-family:inherit}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover{filter:brightness(1.15)}
+  .btn-ghost{background:var(--card2);color:var(--text)}
+  .btn-ghost:hover{background:#2e3345}
+  .btn-danger{background:var(--red);color:#fff}
+  .btn-danger:hover{filter:brightness(1.15)}
+  .btn-sm{padding:5px 10px;font-size:12px;border-radius:8px}
+  .hal{animation:mukul .18s ease}
+  .hidden{display:none!important}
+  @keyframes mukul{from{opacity:0}}
+
+  /* SUMMARY CARDS */
+  .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:20px}
+  .sum-card{background:var(--card);border-radius:var(--radius);padding:20px;position:relative;overflow:hidden}
+  .sum-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;background:var(--accent)}
+  .sum-card.green::before{background:var(--green)}
+  .sum-card.yellow::before{background:var(--yellow)}
+  .sum-card.purple::before{background:var(--purple)}
+  .sum-label{font-size:13px;color:var(--muted);margin-bottom:8px}
+  .sum-value{font-size:24px;font-weight:700}
+  .sum-sub{font-size:12px;color:var(--muted);margin-top:6px}
+  .up{color:var(--green)}
+  .down{color:var(--red)}
+
+  /* GRID */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+
+  .card{background:var(--card);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+  .card h2{font-size:16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .card h2 small{font-size:12px;color:var(--muted);font-weight:400}
+
+  /* CHART */
+  .chart-box{position:relative;height:260px}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+  .dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+  .legend-item b{margin-left:auto;color:var(--text);padding-left:10px}
+
+  /* TARGET */
+  .target-item{margin-bottom:18px}
+  .target-head{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+  .target-head b{font-weight:600}
+  .bar{height:10px;background:var(--card2);border-radius:6px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:6px;transition:width .6s ease}
+  .target-pct{font-size:12px;color:var(--muted);margin-top:4px}
+  .target-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+
+  /* TABLE */
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  .ringkas{margin-left:auto;font-size:13px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;color:var(--muted);font-weight:500;font-size:12px;padding:8px 10px;border-bottom:1px solid var(--card2)}
+  td{padding:12px 10px;border-bottom:1px solid var(--card2);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+  .badge.masuk{background:rgba(34,197,94,.15);color:var(--green)}
+  .badge.keluar{background:rgba(239,68,68,.15);color:var(--red)}
+  .badge.beli{background:rgba(79,140,255,.15);color:var(--accent)}
+  .badge.jual{background:rgba(234,179,8,.15);color:var(--yellow)}
+  .asset-name{font-weight:600}
+  .asset-sub{font-size:12px;color:var(--muted)}
+  .amount-pos{color:var(--green);font-weight:600;white-space:nowrap}
+  .amount-neg{color:var(--red);font-weight:600;white-space:nowrap}
+  .amount-blue{color:var(--accent);font-weight:600;white-space:nowrap}
+  .aksi{display:flex;gap:6px;justify-content:flex-end}
+  .search{max-width:220px;background:var(--card2);border:1px solid #2e3345;border-radius:10px;padding:9px 12px;color:var(--text);font-size:14px;outline:none}
+
+  /* MODAL */
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:20px;z-index:100}
+  .modal-bg.show{display:flex}
+  .modal{background:var(--card);border-radius:var(--radius);padding:24px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto}
+  .modal h3{margin-bottom:18px;font-size:18px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  .field input,.field select,.field textarea{width:100%;background:var(--card2);border:1px solid #2e3345;border-radius:10px;padding:11px 12px;color:var(--text);font-size:14px;outline:none;font-family:inherit}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:560px){.row2{grid-template-columns:1fr}}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.5}
+  .modal-actions{display:flex;gap:10px;margin-top:20px}
+  .modal-actions button{flex:1}
+
+  /* PIECES */
+  .baris-atr{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .baris-atr input[type=text]{flex:1;background:var(--card2);border:1px solid #2e3345;border-radius:8px;padding:8px 10px;color:var(--text)}
+  input[type=color]{width:44px;height:34px;border:none;border-radius:8px;background:none;cursor:pointer;padding:0}
+  .theme-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .theme-row label{font-size:14px;color:var(--text)}
+  .empty{text-align:center;color:var(--muted);padding:30px;font-size:14px}
+  .kategori-txt{display:flex;align-items:center;gap:8px}
+  #fileImpor{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>💰 <span id="appName">Catatan Keuangan</span></h1>
+    <div class="header-actions">
+      <button class="btn-ghost" onclick="openTheme()">🎨 Edit UI</button>
+      <button class="btn-primary" onclick="modalTransaksi()">+ Transaksi</button>
+    </div>
+    <nav class="tabs" style="flex-basis:100%">
+      <button data-hal="dasbor" class="aktif">Dasbor</button>
+      <button data-hal="transaksi">Transaksi</button>
+      <button data-hal="portofolio">Portofolio</button>
+      <button data-hal="target">Target</button>
+      <button data-hal="pengaturan">Pengaturan</button>
+    </nav>
+  </header>
+
+  <section id="hal-dasbor" class="hal">
+    <div class="summary" id="summary"></div>
+    <div class="grid">
+      <div class="card">
+        <h2>Portofolio per Aset <small>nilai sekarang per aset</small></h2>
+        <div class="chart-box"><canvas id="donutLokasi"></canvas></div>
+        <div class="legend" id="legendLokasi"></div>
+      </div>
+      <div class="card">
+        <h2>Pengeluaran per Kategori <small>semua waktu · beli aset jadi "Investasi"</small></h2>
+        <div class="chart-box"><canvas id="donutKategori"></canvas></div>
+        <div class="legend" id="legendKategori"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Pemasukan vs Pengeluaran <small>per hari · hari tanpa transaksi disembunyikan</small></h2>
+      <div class="chart-box" style="height:230px"><canvas id="barBulan"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Target Tabungan <small id="targetCount"></small></h2>
+      <div id="targetList"></div>
+    </div>
+  </section>
+
+  <section id="hal-transaksi" class="hal hidden">
+    <div class="card">
+      <h2>Transaksi</h2>
+      <div class="toolbar">
+        <button class="btn-primary" onclick="modalTransaksi()">+ Catat Transaksi</button>
+        <select id="filterTipe" onchange="renderTransaksi()">
+          <option value="semua">Semua</option>
+          <option value="masuk">Pemasukan</option>
+          <option value="keluar">Pengeluaran</option>
+          <option value="beli">Beli Aset</option>
+          <option value="jual">Jual Aset</option>
+        </select>
+        <input class="search" id="cariTransaksi" placeholder="Cari..." oninput="renderTransaksi()">
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Transaksi</th><th>Jenis</th><th>Tanggal</th><th style="text-align:right">Nominal</th><th></th></tr></thead>
+          <tbody id="txBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="hal-portofolio" class="hal hidden">
+    <div class="card">
+      <h2>Portofolio Aset</h2>
+      <div class="toolbar">
+        <button class="btn-primary" onclick="modalAset()">+ Tambah Aset</button>
+        <span class="ringkas" id="ringkasAset"></span>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Aset</th><th>Modal (ditanam)</th><th>Harga Beli</th><th>Harga Skrg</th><th style="text-align:right">Nilai</th><th style="text-align:right">Laba/Rugi</th><th></th></tr></thead>
+          <tbody id="asetBody"></tbody>
+        </table>
+      </div>
+      <p class="hint">Nilai aset = dana yang ditanam (via transaksi "Beli Aset") × (harga sekarang ÷ harga beli).</p>
+    </div>
+  </section>
+
+  <section id="hal-target" class="hal hidden">
+    <div class="card">
+      <h2>Target Tabungan</h2>
+      <div class="toolbar">
+        <button class="btn-primary" onclick="modalTarget()">+ Tambah Target</button>
+      </div>
+      <div id="daftarTarget"></div>
+    </div>
+  </section>
+
+  <section id="hal-pengaturan" class="hal hidden">
+    <div class="card">
+      <h2>Kategori Pemasukan</h2>
+      <div id="kategori-masuk"></div>
+      <button class="btn-ghost btn-sm" onclick="tambahKategori('masuk')">+ Tambah</button>
+    </div>
+    <div class="card">
+      <h2>Kategori Pengeluaran</h2>
+      <div id="kategori-keluar"></div>
+      <button class="btn-ghost btn-sm" onclick="tambahKategori('keluar')">+ Tambah</button>
+    </div>
+    <div class="card">
+      <h2>Lokasi Dana <small>uang ditaruh di mana</small></h2>
+      <div id="aturLokasi"></div>
+      <button class="btn-ghost btn-sm" onclick="tambahLokasi()">+ Tambah</button>
+    </div>
+    <div class="card">
+      <h2>Aset & Warna Portofolio <small>warna di grafik portofolio</small></h2>
+      <div id="aturAset"></div>
+    </div>
+    <div class="card">
+      <h2>Data</h2>
+      <div class="toolbar">
+        <button class="btn-ghost" onclick="ekspor()">📤 Ekspor JSON</button>
+        <button class="btn-ghost" onclick="document.getElementById('fileImpor').click()">📥 Impor JSON</button>
+        <input type="file" id="fileImpor" accept="application/json" onchange="impor(event)">
+        <button class="btn-danger" onclick="resetData()">Reset Data</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- MODAL UMUM -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h3 id="modalJudul"></h3>
+    <div id="modalBody"></div>
+    <div class="modal-actions" id="modalFooter"></div>
+  </div>
+</div>
+
+<!-- MODAL TEMA -->
+<div class="modal-bg" id="themeModal">
+  <div class="modal">
+    <h3>🎨 Edit Tampilan</h3>
+    <div class="field">
+      <label>Nama Aplikasi</label>
+      <input id="tName" placeholder="Catatan Keuangan">
+    </div>
+    <div class="theme-row"><label>Warna Latar</label><input type="color" id="tBg"></div>
+    <div class="theme-row"><label>Warna Kartu</label><input type="color" id="tCard"></div>
+    <div class="theme-row"><label>Warna Aksen</label><input type="color" id="tAccent"></div>
+    <div class="theme-row"><label>Warna Teks</label><input type="color" id="tText"></div>
+    <div class="theme-row"><label>Mode Terang</label><input type="checkbox" id="tLight" style="width:20px;height:20px"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="resetTheme()">Reset</button>
+      <button class="btn-primary" onclick="saveTheme()">Terapkan</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ STATE ============ */
+const KEY = 'catatanKeuangan';
+const COLORS = ['#4f8cff','#22c55e','#eab308','#a855f7','#ef4444','#06b6d4','#f97316','#14b8a6'];
+const PALETTE = ['#4f8cff','#22c55e','#eab308','#a855f7','#ef4444','#06b6d4','#f97316','#14b8a6','#ec4899','#84cc16','#8b5cf6','#f43f5e'];
+const warnaAsetBaru = d => {
+  const dipakai = new Set(d.aset.map(a => a.warna).filter(Boolean));
+  return PALETTE.find(c => !dipakai.has(c)) || PALETTE[0];
+};
+const JENIS_ASET = ['Saham','Reksadana','Kripto','Emas','Obligasi','Properti','Lainnya'];
+const TIPE_LABEL = { masuk:'Pemasukan', keluar:'Pengeluaran', beli:'Beli Aset', jual:'Jual Aset' };
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const el = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rp = n => 'Rp ' + Math.round(n).toLocaleString('id-ID');
+const shortRp = n => {
+  n = Math.abs(Math.round(n));
+  if (n >= 1e9) return 'Rp ' + (n/1e9).toFixed(2).replace(/\.00$/,'') + ' M';
+  if (n >= 1e6) return 'Rp ' + (n/1e6).toFixed(1).replace(/\.0$/,'') + ' jt';
+  if (n >= 1e3) return 'Rp ' + Math.round(n/1e3) + ' rb';
+  return 'Rp ' + n;
+};
+const rpParse = s => Number(String(s).replace(/\D/g,'')) || 0;
+function rpInput(inp){
+  const n = Number(String(inp.value).replace(/\D/g,''));
+  inp.value = n ? n.toLocaleString('id-ID') : '';
+}
+
+function defaultState(){
+  const m = n => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
+  return {
+    settings: {
+      namaApp: 'Catatan Keuangan', bg: '#0f1117', card: '#1a1d29', accent: '#4f8cff', text: '#e8eaf0', light: false,
+      kategori: {
+        masuk: [{id:uid(), nama:'Gaji', warna:'#22c55e'}, {id:uid(), nama:'Jualan', warna:'#06b6d4'}],
+        keluar: [
+          {id:uid(), nama:'Makan', warna:'#eab308'},
+          {id:uid(), nama:'Transport', warna:'#a855f7'},
+          {id:uid(), nama:'Belanja', warna:'#ef4444'},
+          {id:uid(), nama:'Tagihan', warna:'#4f8cff'},
+        ],
+      },
+      lokasi: [
+        {id:uid(), nama:'Bank', warna:'#4f8cff'},
+        {id:uid(), nama:'Dompet', warna:'#22c55e'},
+        {id:uid(), nama:'Sekuritas', warna:'#a855f7'},
+      ],
+    },
+    transaksi: [
+      {id:uid(), tipe:'masuk',  nominal:5500000, kategori:'Gaji',    lokasi:'Bank',   tanggal:m(5), catatan:'Gaji bulan'},
+      {id:uid(), tipe:'keluar', nominal:1200000, kategori:'Makan',   lokasi:'Dompet', tanggal:m(5), catatan:''},
+      {id:uid(), tipe:'masuk',  nominal:800000,  kategori:'Jualan',  lokasi:'Bank',   tanggal:m(4), catatan:'Jualan online'},
+      {id:uid(), tipe:'keluar', nominal:900000,  kategori:'Tagihan', lokasi:'Bank',   tanggal:m(4), catatan:'Listrik + WiFi'},
+      {id:uid(), tipe:'masuk',  nominal:5500000, kategori:'Gaji',    lokasi:'Bank',   tanggal:m(3), catatan:''},
+      {id:uid(), tipe:'keluar', nominal:1500000, kategori:'Belanja', lokasi:'Dompet', tanggal:m(3), catatan:''},
+      {id:uid(), tipe:'beli',   nominal:8200000, nama:'BBRI',        tanggal:m(3),    catatan:''},
+      {id:uid(), tipe:'keluar', nominal:800000,  kategori:'Transport', lokasi:'Dompet', tanggal:m(2), catatan:''},
+      {id:uid(), tipe:'beli',   nominal:2000000, nama:'Bitcoin',     tanggal:m(2),    catatan:''},
+      {id:uid(), tipe:'keluar', nominal:2000000, kategori:'Belanja', lokasi:'Bank',   tanggal:m(1), catatan:'Keperluan rumah'},
+      {id:uid(), tipe:'beli',   nominal:2600000, nama:'Emas Antam',  tanggal:m(1),    catatan:''},
+      {id:uid(), tipe:'masuk',  nominal:5500000, kategori:'Gaji',    lokasi:'Bank',   tanggal:m(1), catatan:''},
+      {id:uid(), tipe:'masuk',  nominal:5500000, kategori:'Gaji',    lokasi:'Bank',   tanggal:m(0), catatan:''},
+      {id:uid(), tipe:'keluar', nominal:1000000, kategori:'Makan',   lokasi:'Dompet', tanggal:m(0), catatan:''},
+    ],
+    aset: [
+      {id:uid(), nama:'BBRI',      jenis:'Saham',     warna:'#4f8cff',  hargaBeli:4100,     hargaSekarang:4650},
+      {id:uid(), nama:'Bitcoin',   jenis:'Kripto',    warna:'#eab308',  hargaBeli:900000000, hargaSekarang:1020000000},
+      {id:uid(), nama:'Emas Antam',jenis:'Emas',      warna:'#f97316',  hargaBeli:1050000,   hargaSekarang:1180000},
+    ],
+    target: [
+      {id:uid(), nama:'Dana Darurat', nominal:15000000,  terkumpul:6000000},
+      {id:uid(), nama:'Mobil Baru',   nominal:200000000, terkumpul:35000000},
+    ],
+  };
+}
+function muat(){
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d.settings && d.settings.kategori && d.transaksi) {
+        if (typeof d.settings.bg !== 'string') {
+          const terang = d.settings.mode === 'terang';
+          d.settings = {
+            namaApp: d.settings.namaApp || 'Catatan Keuangan',
+            bg: terang ? '#f3f5f8' : '#0f1117',
+            card: terang ? '#ffffff' : '#1a1d29',
+            accent: d.settings.warna || '#4f8cff',
+            text: terang ? '#1c2430' : '#e8eaf0',
+            light: terang,
+            kategori: d.settings.kategori,
+            lokasi: d.settings.lokasi,
+          };
+        }
+        d.transaksi = d.transaksi || [];
+        (d.aset || []).forEach(a => {
+          if (typeof a.unit === 'number' && a.unit > 0) {
+            d.transaksi.push({ id: uid(), tipe: 'beli', nominal: Math.round(a.unit * a.hargaBeli),
+              nama: a.nama, tanggal: new Date().toISOString().slice(0,10), catatan: 'Migrasi aset lama' });
+          }
+          delete a.unit;
+          a.hargaBeli = a.hargaBeli > 0 ? a.hargaBeli : 1;
+          a.hargaSekarang = a.hargaSekarang > 0 ? a.hargaSekarang : a.hargaBeli;
+          if (!a.warna) a.warna = warnaAsetBaru(d);
+        });
+        return d;
+      }
+    }
+  } catch (e) {}
+  return defaultState();
+}
+let S = muat();
+const simpan = () => localStorage.setItem(KEY, JSON.stringify(S));
+
+/* ============ TEMA ============ */
+function shade(hex, percent){
+  let R=parseInt(hex.slice(1,3),16), G=parseInt(hex.slice(3,5),16), B=parseInt(hex.slice(5,7),16);
+  R = Math.max(0,Math.min(255, R + percent*2.55));
+  G = Math.max(0,Math.min(255, G + percent*2.55));
+  B = Math.max(0,Math.min(255, B + percent*2.55));
+  return '#' + [R,G,B].map(x=>Math.round(x).toString(16).padStart(2,'0')).join('');
+}
+function applyTheme(){
+  const t = S.settings;
+  const r = document.documentElement.style;
+  r.setProperty('--bg', t.bg);
+  r.setProperty('--card', t.card);
+  r.setProperty('--text', t.text);
+  r.setProperty('--accent', t.accent);
+  r.setProperty('--card2', t.light ? shade(t.card, -10) : shade(t.card, 12));
+  el('appName').textContent = t.namaApp;
+  document.title = t.namaApp;
+}
+function openTheme(){
+  const t = S.settings;
+  el('tName').value = t.namaApp;
+  el('tBg').value = t.bg;
+  el('tCard').value = t.card;
+  el('tAccent').value = t.accent;
+  el('tText').value = t.text;
+  el('tLight').checked = t.light;
+  el('themeModal').classList.add('show');
+}
+function saveTheme(){
+  S.settings = {
+    namaApp: el('tName').value.trim() || 'Catatan Keuangan',
+    bg: el('tBg').value, card: el('tCard').value, accent: el('tAccent').value,
+    text: el('tText').value, light: el('tLight').checked,
+    kategori: S.settings.kategori, lokasi: S.settings.lokasi
+  };
+  el('themeModal').classList.remove('show');
+  simpan(); render();
+}
+function resetTheme(){
+  const d = defaultState();
+  S.settings = { ...d.settings, kategori: S.settings.kategori, lokasi: S.settings.lokasi };
+  el('themeModal').classList.remove('show');
+  simpan(); render();
+}
+
+/* ============ NAVIGASI ============ */
+document.querySelectorAll('.tabs button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('aktif'));
+    b.classList.add('aktif');
+    document.querySelectorAll('.hal').forEach(h => h.classList.add('hidden'));
+    el('hal-' + b.dataset.hal).classList.remove('hidden');
+  };
+});
+
+/* ============ MODAL ============ */
+function bukaModal(judul, bodyHtml, tombol, onSimpan){
+  el('modalJudul').textContent = judul;
+  el('modalBody').innerHTML = bodyHtml;
+  el('modalFooter').innerHTML =
+    `<button class="btn-ghost" onclick="tutupModal()">Batal</button>` +
+    `<button class="btn-primary" id="modalOk">${tombol}</button>`;
+  el('modal').classList.add('show');
+  el('modalOk').onclick = onSimpan;
+}
+function tutupModal(){ el('modal').classList.remove('show'); }
+el('modal').addEventListener('click', e => { if (e.target === el('modal')) tutupModal(); });
+el('themeModal').addEventListener('click', e => { if (e.target === el('themeModal')) el('themeModal').classList.remove('show'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { tutupModal(); el('themeModal').classList.remove('show'); } });
+
+/* ============ KEKAYAAN / KAS / ASET ============ */
+// semua aliran: masuk + , keluar/beli − , jual +
+function kasNow(){
+  let s = 0;
+  for (const t of S.transaksi) {
+    if (t.tipe === 'masuk') s += t.nominal;
+    else if (t.tipe === 'keluar' || t.tipe === 'beli') s -= t.nominal;
+    else if (t.tipe === 'jual') s += t.nominal;
+  }
+  return s;
+}
+// saldo kas per titik waktu (utk delta 6 bulan)
+function kasAt(monthOffset){
+  const now = new Date(), y0 = now.getFullYear(), m0 = now.getMonth();
+  let s = 0;
+  for (const t of S.transaksi) {
+    const dd = new Date(t.tanggal);
+    const n = (y0 - dd.getFullYear())*12 + (m0 - dd.getMonth());
+    if (n >= monthOffset) {
+      if (t.tipe === 'masuk') s += t.nominal;
+      else if (t.tipe === 'keluar' || t.tipe === 'beli') s -= t.nominal;
+      else if (t.tipe === 'jual') s += t.nominal;
+    }
+  }
+  return s;
+}
+const saldoKas = () => Math.max(0, kasNow());
+// modal dalam aset = dari transaksi beli/jual
+function investAset(nama, excludeId){
+  let s = 0;
+  for (const t of S.transaksi) {
+    if (t.id === excludeId) continue;
+    if (t.tipe === 'beli' && t.nama === nama) s += t.nominal;
+    else if (t.tipe === 'jual' && t.nama === nama) s -= t.nominal;
+  }
+  return Math.max(s, 0);
+}
+const asetByNama = nama => S.aset.find(a => a.nama === nama);
+// ponytail: nilai aset = modal × rasio harga; upgrade path: pencatatan lot per harga jika perlu presisi
+function nilaiAset(a){
+  const r = a.hargaBeli > 0 ? a.hargaSekarang / a.hargaBeli : 1;
+  return Math.round(investAset(a.nama) * r);
+}
+function labaAset(a){ return nilaiAset(a) - investAset(a.nama); }
+function investTotal(){ return S.aset.reduce((s,a) => s + investAset(a.nama), 0); }
+function nilaiAsetTotal(){ return S.aset.reduce((s,a) => s + nilaiAset(a), 0); }
+function totalLaba(){ return S.aset.reduce((s,a) => s + labaAset(a), 0); }
+
+function warnaNama(nama, daftar){
+  const d = daftar.find(x => x.nama === nama);
+  if (d) return d.warna;
+  let h = 0; for (const c of nama) h = (h*31 + c.codePointAt(0)) >>> 0;
+  return COLORS[h % COLORS.length];
+}
+function sumBy(list){
+  const m = {}, warna = {};
+  list.forEach(x => {
+    if (!m[x[0]]) { m[x[0]] = 0; warna[x[0]] = x[2]; }
+    m[x[0]] += x[1];
+  });
+  return Object.keys(m)
+    .map(k => [k, m[k], warna[k] || COLORS[0]])
+    .sort((a, b) => b[1] - a[1]);
+}
+function bulanKey(t){
+  const d = new Date(t.tanggal);
+  return d.getFullYear()*100 + d.getMonth() + 1;
+}
+
+/* ============ GRAFIK ============ */
+let donutLokasiChart, donutKategoriChart, barBulanChart;
+function gambarDonut(canvasId, legendId, segments){
+  const labels = segments.map(s => s[0]);
+  const data = segments.map(s => s[1]);
+  const bg = segments.map(s => s[2]);
+  const ref = canvasId === 'donutLokasi';
+  const old = ref ? donutLokasiChart : donutKategoriChart;
+  if (old) old.destroy();
+  const sum = data.reduce((a,b) => a+b, 0);
+  const c = new Chart(el(canvasId), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: bg, borderWidth: 0, hoverOffset: 8 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '68%',
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: x => ` ${x.label}: ${rp(x.raw)}` } } }
+    }
+  });
+  if (ref) donutLokasiChart = c; else donutKategoriChart = c;
+  el(legendId).innerHTML = sum
+    ? labels.map((l,i) => `<div class="legend-item"><span class="dot" style="background:${bg[i]}"></span>${esc(l)}
+        <b>${shortRp(data[i])}</b><span>${(data[i]/sum*100).toFixed(1)}%</span></div>`).join('')
+    : '<div class="empty">Belum ada data</div>';
+}
+function gambarBar(){
+  const now = new Date();
+  const labels = [], masukArr = [], keluarArr = [];
+  for (let i = 29; i >= 0; i--) {
+    const b = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const key = b.getFullYear() + '-' + String(b.getMonth() + 1).padStart(2,'0') + '-' + String(b.getDate()).padStart(2,'0');
+    labels.push(b.getDate() + '/' + (b.getMonth() + 1));
+    let mi = 0, ke = 0;
+    S.transaksi.forEach(t => {
+      if (t.tanggal !== key) return;
+      if (t.tipe === 'masuk') mi += t.nominal;
+      else if (t.tipe === 'keluar' || t.tipe === 'beli') ke += t.nominal;
+    });
+    masukArr.push(mi); keluarArr.push(ke);
+  }
+  const labels2 = [], m2 = [], k2 = [];
+  for (let i = 0; i < labels.length; i++) {
+    if (masukArr[i] > 0 || keluarArr[i] > 0) { labels2.push(labels[i]); m2.push(masukArr[i]); k2.push(keluarArr[i]); }
+  }
+  if (barBulanChart) barBulanChart.destroy();
+  barBulanChart = new Chart(el('barBulan'), {
+    type: 'bar',
+    data: { labels: labels2, datasets: [
+      { label:'Pemasukan', data: m2, backgroundColor: S.settings.accent, borderRadius: 4 },
+      { label:'Pengeluaran', data: k2, backgroundColor: '#ef4444', borderRadius: 4 },
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#8b90a3', boxWidth: 12 } },
+        tooltip: { callbacks: { label: x => ` ${x.dataset.label}: ${rp(x.raw)}` } } },
+      scales: {
+        x: { grid: { display:false }, ticks: { color:'#8b90a3' } },
+        y: { grid: { color:'rgba(139,144,163,.15)' }, ticks: { color:'#8b90a3', callback: v => shortRp(v) } }
+      }
+    }
+  });
+}
+
+/* ============ DASBOR ============ */
+function renderDasbor(){
+  const porto = nilaiAsetTotal();
+  const total = porto + saldoKas();
+  const delta = kasAt(0) - kasAt(6);
+  const avg = S.target.length
+    ? Math.round(S.target.reduce((a,t) => a + Math.min(100, t.terkumpul / t.nominal * 100), 0) / S.target.length)
+    : 0;
+
+  el('summary').innerHTML = `
+    <div class="sum-card">
+      <div class="sum-label">Total Kekayaan</div>
+      <div class="sum-value">${rp(total)}</div>
+      <div class="sum-sub" id="wealthChange">${delta >= 0 ? `<span class="up">▲ ${rp(delta)}</span>` : `<span class="down">▼ ${rp(Math.abs(delta))}</span>`} kas dari 6 bulan lalu</div>
+    </div>
+    <div class="sum-card green">
+      <div class="sum-label">Total Aset (Portofolio)</div>
+      <div class="sum-value">${rp(porto)}</div>
+      <div class="sum-sub">Modal ${shortRp(investTotal())} · <span class="${totalLaba()>=0?'up':'down'}">${totalLaba()>=0?'+':''}${rp(totalLaba())}</span></div>
+    </div>
+    <div class="sum-card yellow">
+      <div class="sum-label">Saldo Kas</div>
+      <div class="sum-value">${rp(saldoKas())}</div>
+      <div class="sum-sub">sisa pemasukan utk dipakai</div>
+    </div>
+    <div class="sum-card purple">
+      <div class="sum-label">Target Tabungan</div>
+      <div class="sum-value">${avg}%</div>
+      <div class="sum-sub">rata-rata progres</div>
+    </div>`;
+
+  gambarDonut('donutLokasi', 'legendLokasi', S.aset
+    .filter(a => nilaiAset(a) > 0)
+    .map(a => [a.nama, nilaiAset(a), a.warna || S.settings.accent]));
+
+  gambarDonut('donutKategori', 'legendKategori',
+    sumBy(S.transaksi.filter(t => t.tipe === 'keluar')
+      .map(t => [t.kategori, t.nominal, warnaNama(t.kategori, S.settings.kategori.keluar)]))
+    .concat(sumBy(S.transaksi.filter(t => t.tipe === 'beli')
+      .map(t => ['Investasi', t.nominal, S.settings.accent]))));
+
+  gambarBar();
+
+  el('targetCount').textContent = S.target.length + ' target';
+  el('targetList').innerHTML = S.target.length
+    ? S.target.map(t => {
+        const pct = Math.min(100, t.terkumpul / t.nominal * 100);
+        return `<div class="target-item">
+          <div class="target-head"><b>${esc(t.nama)}</b><span>${shortRp(t.terkumpul)} / ${shortRp(t.nominal)}</span></div>
+          <div class="bar"><div class="bar-fill" style="width:${pct}%;background:${S.settings.accent}"></div></div>
+          <div class="target-pct">${pct.toFixed(1)}% tercapai</div>
+        </div>`;
+      }).join('')
+    : '<div class="empty">Belum ada target. Buat di halaman Target.</div>';
+}
+
+/* ============ TRANSAKSI ============ */
+function txKategoriOptions(tipe, pilih){
+  return S.settings.kategori[tipe].map((k,i) => `<option value="${i}" ${k.nama === pilih ? 'selected' : ''}>${esc(k.nama)}</option>`).join('');
+}
+function lokasiOptions(pilih){
+  return S.settings.lokasi.map((l,i) => `<option value="${i}" ${l.nama === pilih ? 'selected' : ''}>${esc(l.nama)}</option>`).join('');
+}
+function txTog(){
+  const v = el('fTipe').value;
+  const aset = v === 'beli' || v === 'jual';
+  el('regionAset').classList.toggle('hidden', !aset);
+  el('regionKatLok').classList.toggle('hidden', aset);
+  if (aset) el('dlAset').innerHTML = S.aset.map(a => `<option value="${esc(a.nama)}">`).join('');
+}
+function autoJenis(v){
+  const a = asetByNama(v);
+  const j = el('fJenisAset');
+  if (a && j) j.value = a.jenis;
+}
+function modalTransaksi(id){
+  const t = id ? S.transaksi.find(x => x.id === id) : null;
+  const tipe = S.transaksi.find(x => x.id === id)?.tipe || 'keluar';
+  bukaModal(t ? 'Edit Transaksi' : 'Catat Transaksi', `
+    <div class="field"><label>Jenis</label>
+      <select id="fTipe" onchange="txTog()">
+        <option value="masuk">Pemasukan</option>
+        <option value="keluar">Pengeluaran</option>
+        <option value="beli">Beli Aset</option>
+        <option value="jual">Jual Aset</option>
+      </select>
+    </div>
+    <div class="field"><label>Nominal (Rp)</label><input id="fNominal" type="text" inputmode="numeric" placeholder="0" oninput="rpInput(this)" value="${t ? (t.nominal || '').toLocaleString('id-ID') : ''}"></div>
+    <div id="regionKatLok" class="row2">
+      <div class="field"><label>Kategori</label><select id="fKategori"></select></div>
+      <div class="field"><label>Lokasi (taruh di mana)</label><select id="fLokasi"></select></div>
+    </div>
+    <div id="regionAset" class="row2 hidden">
+      <div class="field"><label>Nama Aset</label>
+        <input id="fNamaAset" type="text" list="dlAset" value="${esc(t && (t.nama || ''))}" oninput="autoJenis(this.value)">
+        <datalist id="dlAset"></datalist>
+        <div class="hint">Pakai aset yang sudah ada, atau ketik aset baru.</div>
+      </div>
+      <div class="field"><label>Jenis Aset</label>
+        <select id="fJenisAset">${JENIS_ASET.map(j => `<option>${j}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Tanggal</label><input id="fTanggal" type="date" value="${t ? t.tanggal : new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label>Catatan</label><input id="fCatatan" type="text" value="${esc(t ? t.catatan : '')}"></div>
+    </div>`, 'Simpan', () => {
+    const tipe2 = el('fTipe').value;
+    const nominal = rpParse(el('fNominal').value);
+    if (!(nominal > 0)) { alert('Isi nominal yang valid.'); return; }
+    const data = { tipe: tipe2, nominal, tanggal: el('fTanggal').value, catatan: el('fCatatan').value.trim() };
+    if (tipe2 === 'masuk' || tipe2 === 'keluar') {
+      const kat = S.settings.kategori[tipe2][parseInt(el('fKategori').value, 10)];
+      const lok = S.settings.lokasi[parseInt(el('fLokasi').value, 10)];
+      if (!kat || !lok) { alert('Kategori & lokasi wajib diisi.'); return; }
+      data.kategori = kat.nama; data.lokasi = lok.nama;
+    } else {
+      const nama = el('fNamaAset').value.trim();
+      if (!nama) { alert('Nama aset wajib diisi.'); return; }
+      if (tipe2 === 'jual') {
+        const inv = investAset(nama, id);
+        if (inv < nominal) { alert('Dana tertanam di ' + nama + ' hanya ' + shortRp(inv) + ' — tidak bisa jual lebih dari itu.'); return; }
+      }
+      if (!asetByNama(nama)) S.aset.push({ id: uid(), nama, jenis: el('fJenisAset').value, hargaBeli: 1, hargaSekarang: 1, warna: warnaAsetBaru(S) });
+      data.nama = nama;
+    }
+    if (id) Object.assign(S.transaksi.find(x => x.id === id), data);
+    else S.transaksi.push({ id: uid(), ...data });
+    simpan(); tutupModal(); render();
+  });
+  el('fTipe').value = tipe;
+  if (tipe === 'beli' || tipe === 'jual') { txTog(); autoJenis(t && t.nama); }
+  else {
+    const titular = t && t.tipe;
+    el('fKategori').innerHTML = txKategoriOptions(tipe, t && t.kategori);
+    el('fLokasi').innerHTML = lokasiOptions(t && t.lokasi);
+  }
+}
+function renderTransaksi(){
+  const tipe = el('filterTipe').value;
+  const q = el('cariTransaksi').value.toLowerCase();
+  let daftar = S.transaksi;
+  if (tipe !== 'semua') daftar = daftar.filter(t => t.tipe === tipe);
+  if (q) daftar = daftar.filter(t => (t.kategori + ' ' + t.lokasi + ' ' + t.nama + ' ' + t.catatan).toLowerCase().includes(q));
+  daftar = [...daftar].sort((a,b) => b.tanggal.localeCompare(a.tanggal) || b.catatan.localeCompare(a.catatan));
+  el('txBody').innerHTML = daftar.length ? daftar.map(t => {
+    const aset = t.tipe === 'beli' || t.tipe === 'jual';
+    const naik = t.tipe === 'masuk' || t.tipe === 'jual';
+    const nm = aset ? t.nama : t.kategori;
+    let wr;
+    if (!aset) wr = warnaNama(t.kategori, t.tipe === 'masuk' ? S.settings.kategori.masuk : S.settings.kategori.keluar);
+    else if (t.tipe === 'beli') wr = (asetByNama(t.nama) || {}).warna || S.settings.accent;
+    else wr = '#eab308';
+    const sub = aset ? ('Portofolio' + (t.catatan ? ' · ' + t.catatan : '')) : (t.lokasi + (t.catatan ? ' · ' + t.catatan : ''));
+    const cls = t.tipe === 'masuk' ? 'amount-pos' : (t.tipe === 'jual' ? 'amount-pos' : (t.tipe === 'beli' ? 'amount-blue' : 'amount-neg'));
+    return `<tr>
+      <td><span class="kategori-txt"><span class="dot" style="background:${wr}"></span><span class="asset-name">${esc(nm)}</span></span><div class="asset-sub">${esc(sub)}</div></td>
+      <td><span class="badge ${t.tipe}">${TIPE_LABEL[t.tipe]}</span></td>
+      <td style="color:var(--muted)">${t.tanggal}</td>
+      <td style="text-align:right" class="${cls}">${naik ? '+' : '−'}${rp(t.nominal)}</td>
+      <td><div class="aksi">
+        <button class="btn-ghost btn-sm" onclick="modalTransaksi('${t.id}')">Edit</button>
+        <button class="btn-danger btn-sm" onclick="hapusTransaksi('${t.id}')">✕</button>
+      </div></td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="5" class="empty">Tidak ada transaksi</td></tr>';
+}
+function hapusTransaksi(id){
+  if (!confirm('Hapus transaksi ini?')) return;
+  S.transaksi = S.transaksi.filter(t => t.id !== id);
+  simpan(); render();
+}
+
+/* ============ PORTFOLIO ============ */
+function modalAset(id){
+  const a = id ? S.aset.find(x => x.id === id) : null;
+  bukaModal(a ? 'Edit Aset' : 'Tambah Aset', `
+    <div class="field"><label>Nama Aset / Sekuritas</label><input id="fA_Nama" type="text" value="${esc(a ? a.nama : '')}" placeholder="cth: BBCA, Bitcoin, Emas Antam"></div>
+    <div class="field"><label>Jenis</label><select id="fA_Jenis">${JENIS_ASET.map(j => `<option ${a && a.jenis === j ? 'selected' : ''}>${j}</option>`).join('')}</select></div>
+    <div class="field"><label>Warna di grafik portofolio</label><input type="color" id="fA_Warna" value="${a ? (a.warna || S.settings.accent) : warnaAsetBaru(S)}" style="width:100%;height:40px;padding:4px"></div>
+    <div class="row2">
+      <div class="field"><label>Harga Beli per unit (Rp)</label><input id="fA_Beli" type="text" inputmode="numeric" oninput="rpInput(this)" value="${a ? a.hargaBeli.toLocaleString('id-ID') : ''}"></div>
+      <div class="field"><label>Harga Sekarang per unit (Rp)</label><input id="fA_Skrg" type="text" inputmode="numeric" oninput="rpInput(this)" value="${a ? a.hargaSekarang.toLocaleString('id-ID') : ''}"></div>
+    </div>
+    <p class="hint">Nilai aset dihitung dari dana tertanam (lewat transaksi "Beli Aset") dikali rasio harga sekarang ÷ harga beli.</p>`, 'Simpan', () => {
+    const nama = el('fA_Nama').value.trim();
+    const beli = rpParse(el('fA_Beli').value), skrg = rpParse(el('fA_Skrg').value);
+    if (!nama) { alert('Nama aset wajib diisi.'); return; }
+    if (!(beli > 0) || !(skrg > 0)) { alert('Harga beli & harga sekarang harus lebih dari 0.'); return; }
+    const data = { nama, jenis: el('fA_Jenis').value, warna: el('fA_Warna').value, hargaBeli: beli, hargaSekarang: skrg };
+    if (id) Object.assign(S.aset.find(x => x.id === id), data);
+    else S.aset.push({ id: uid(), ...data });
+    simpan(); tutupModal(); render();
+  });
+}
+function updateHarga(id){
+  const a = S.aset.find(x => x.id === id);
+  bukaModal(`Update Harga — ${a.nama}`, `
+    <div class="field"><label>Harga Sekarang per unit (Rp)</label><input id="fHrg" type="text" inputmode="numeric" oninput="rpInput(this)" value="${a.hargaSekarang.toLocaleString('id-ID')}"></div>`, 'Simpan', () => {
+    const v = rpParse(el('fHrg').value);
+    if (!(v > 0)) { alert('Masukkan angka yang valid.'); return; }
+    a.hargaSekarang = v; simpan(); tutupModal(); render();
+  });
+  const inp = el('fHrg'); inp.focus(); inp.select();
+}
+function renderPortofolio(){
+  const p = nilaiAsetTotal(), lab = totalLaba();
+  el('ringkasAset').innerHTML = `Portofolio: <b>${rp(p)}</b> · Modal ${shortRp(investTotal())} · <span class="${lab>=0?'up':'down'}">${lab>=0?'+':''}${shortRp(lab)}</span>`;
+  el('asetBody').innerHTML = S.aset.length ? S.aset.map(a => {
+    const inv = investAset(a.nama), nilai = nilaiAset(a), lab = labaAset(a);
+    return `<tr>
+      <td><span class="kategori-txt"><span class="dot" style="background:${a.warna || S.settings.accent}"></span><span class="asset-name">${esc(a.nama)}</span></span><div class="asset-sub">${a.jenis}</div></td>
+      <td>${rp(inv)}</td>
+      <td>${rp(a.hargaBeli)}</td>
+      <td>${rp(a.hargaSekarang)}</td>
+      <td style="text-align:right">${rp(nilai)}</td>
+      <td style="text-align:right" class="${lab >= 0 ? 'amount-pos' : 'amount-neg'}">${lab >= 0 ? '+' : ''}${rp(lab)}</td>
+      <td><div class="aksi">
+        <button class="btn-ghost btn-sm" onclick="updateHarga('${a.id}')">Harga</button>
+        <button class="btn-ghost btn-sm" onclick="modalAset('${a.id}')">Edit</button>
+        <button class="btn-danger btn-sm" onclick="hapusAset('${a.id}')">✕</button>
+      </div></td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="7" class="empty">Belum ada aset. Tambah aset, lalu catat pembelian via transaksi "Beli Aset".</td></tr>';
+}
+function hapusAset(id){
+  const a = S.aset.find(x => x.id === id);
+  if (investAset(a.nama) > 0 && !confirm('Aset ini masih punya dana tertanam. Hapus aset tetap membuat transaksi beli/jual tercatat (dana tetap dihitung). Hapus?')) return;
+  S.aset = S.aset.filter(x => x.id !== id);
+  simpan(); render();
+}
+
+/* ============ TARGET ============ */
+function modalTarget(id){
+  const t = id ? S.target.find(x => x.id === id) : null;
+  bukaModal(t ? 'Edit Target' : 'Tambah Target', `
+    <div class="field"><label>Nama Target</label><input id="fT_Nama" type="text" value="${esc(t ? t.nama : '')}"></div>
+    <div class="row2">
+      <div class="field"><label>Target (Rp)</label><input id="fT_Nominal" type="text" inputmode="numeric" oninput="rpInput(this)" value="${t ? t.nominal.toLocaleString('id-ID') : ''}"></div>
+      <div class="field"><label>Terkumpul (Rp)</label><input id="fT_Terkumpul" type="text" inputmode="numeric" oninput="rpInput(this)" value="${t ? t.terkumpul.toLocaleString('id-ID') : '0'}"></div>
+    </div>`, 'Simpan', () => {
+    const nama = el('fT_Nama').value.trim();
+    const nominal = rpParse(el('fT_Nominal').value), terkumpul = rpParse(el('fT_Terkumpul').value);
+    if (!nama) { alert('Nama target wajib diisi.'); return; }
+    if (!(nominal > 0)) { alert('Target harus lebih dari 0.'); return; }
+    const data = { nama, nominal, terkumpul: terkumpul >= 0 ? terkumpul : 0 };
+    if (id) Object.assign(S.target.find(x => x.id === id), data);
+    else S.target.push({ id: uid(), ...data });
+    simpan(); tutupModal(); render();
+  });
+}
+function tambahDana(id){
+  const t = S.target.find(x => x.id === id);
+  bukaModal(`Tambah Dana — ${t.nama}`, `
+    <div class="field"><label>Jumlah (Rp)</label><input id="fDana" type="text" inputmode="numeric" oninput="rpInput(this)" placeholder="0"></div>`, 'Tambah', () => {
+    const v = rpParse(el('fDana').value);
+    if (!(v > 0)) { alert('Masukkan nominal yang valid.'); return; }
+    t.terkumpul += v; simpan(); tutupModal(); render();
+  });
+  el('fDana').focus();
+}
+function renderTarget(){
+  el('daftarTarget').innerHTML = S.target.length ? `<div class="grid">${S.target.map(t => {
+    const pct = Math.min(100, t.terkumpul / t.nominal * 100);
+    return `<div class="card" style="margin:0">
+      <div class="target-head"><b>${esc(t.nama)}</b><span>${pct.toFixed(1)}%</span></div>
+      <div class="bar"><div class="bar-fill" style="width:${pct}%;background:${S.settings.accent}"></div></div>
+      <div class="target-pct">${rp(t.terkumpul)} / ${rp(t.nominal)}</div>
+      <div class="target-actions">
+        <button class="btn-primary btn-sm" onclick="tambahDana('${t.id}')">+ Dana</button>
+        <button class="btn-ghost btn-sm" onclick="modalTarget('${t.id}')">Edit</button>
+        <button class="btn-danger btn-sm" onclick="hapusTarget('${t.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('')}</div>` : '<div class="empty">Belum ada target. Klik "+ Tambah Target".</div>';
+}
+function hapusTarget(id){
+  if (!confirm('Hapus target ini?')) return;
+  S.target = S.target.filter(t => t.id !== id);
+  simpan(); render();
+}
+
+/* ============ PENGATURAN ============ */
+function barisAtr(item, onNama, onWarna, onHapus){
+  return `<div class="baris-atr">
+    <input type="color" value="${item.warna}" onchange="${onWarna}(this.value)">
+    <input type="text" value="${esc(item.nama)}" onchange="${onNama}(this.value)">
+    <button class="btn-danger btn-sm" onclick="${onHapus}()">✕</button>
+  </div>`;
+}
+function renderPengaturan(){
+  el('kategori-masuk').innerHTML = S.settings.kategori.masuk.map(x =>
+    barisAtr(x, `gantiNamaKategori('masuk','${x.id}')`, `gantiWarnaKategori('masuk','${x.id}')`, `hapusKategori('masuk','${x.id}')`)).join('');
+  el('kategori-keluar').innerHTML = S.settings.kategori.keluar.map(x =>
+    barisAtr(x, `gantiNamaKategori('keluar','${x.id}')`, `gantiWarnaKategori('keluar','${x.id}')`, `hapusKategori('keluar','${x.id}')`)).join('');
+  el('aturLokasi').innerHTML = S.settings.lokasi.map(x =>
+    barisAtr(x, `gantiNamaLokasi('${x.id}')`, `gantiWarnaLokasi('${x.id}')`, `hapusLokasi('${x.id}')`)).join('');
+  el('aturAset').innerHTML = S.aset.map(x =>
+    barisAtr(x, `gantiNamaAset('${x.id}')`, `gantiWarnaAset('${x.id}')`, `hapusAset('${x.id}')`)).join('');
+}
+function gantiNamaAset(id, nama){
+  const item = S.aset.find(x => x.id === id);
+  const lama = item.nama;
+  item.nama = nama.trim() || lama;
+  S.transaksi.forEach(t => { if ((t.tipe === 'beli' || t.tipe === 'jual') && t.nama === lama) t.nama = item.nama; });
+  simpan(); render();
+}
+function gantiWarnaAset(id, warna){
+  S.aset.find(x => x.id === id).warna = warna;
+  simpan(); render();
+}
+function gantiNamaKategori(tipe, id, nama){
+  const item = S.settings.kategori[tipe].find(x => x.id === id);
+  const lama = item.nama;
+  item.nama = nama.trim() || lama;
+  S.transaksi.forEach(t => { if (t.tipe === tipe && t.kategori === lama) t.kategori = item.nama; });
+  simpan(); render();
+}
+function gantiWarnaKategori(tipe, id, warna){
+  S.settings.kategori[tipe].find(x => x.id === id).warna = warna;
+  simpan(); render();
+}
+function hapusKategori(tipe, id){
+  const daftar = S.settings.kategori[tipe];
+  if (daftar.length <= 1) return alert('Minimal 1 kategori.');
+  S.settings.kategori[tipe] = daftar.filter(x => x.id !== id);
+  simpan(); render();
+}
+function tambahKategori(tipe){
+  S.settings.kategori[tipe].push({ id: uid(), nama: 'Kategori baru', warna: COLORS[S.settings.kategori[tipe].length % COLORS.length] });
+  simpan(); renderPengaturan();
+}
+function gantiNamaLokasi(id, nama){
+  const item = S.settings.lokasi.find(x => x.id === id);
+  const lama = item.nama;
+  item.nama = nama.trim() || lama;
+  S.transaksi.forEach(t => { if (t.lokasi === lama) t.lokasi = item.nama; });
+  simpan(); render();
+}
+function gantiWarnaLokasi(id, warna){
+  S.settings.lokasi.find(x => x.id === id).warna = warna;
+  simpan(); render();
+}
+function hapusLokasi(id){
+  if (S.settings.lokasi.length <= 1) return alert('Minimal 1 lokasi.');
+  S.settings.lokasi = S.settings.lokasi.filter(x => x.id !== id);
+  simpan(); render();
+}
+function tambahLokasi(){
+  S.settings.lokasi.push({ id: uid(), nama: 'Lokasi baru', warna: COLORS[S.settings.lokasi.length % COLORS.length] });
+  simpan(); renderPengaturan();
+}
+
+/* ============ DATA ============ */
+function ekspor(){
+  const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `catatan-keuangan-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function impor(e){
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!d.settings || !d.settings.kategori || !d.transaksi) throw 0;
+      S = d;
+      (S.aset || []).forEach(a => { if (!a.warna) a.warna = warnaAsetBaru(S); });
+      simpan(); render();
+      alert('Data berhasil dimuat.');
+    } catch (err) { alert('File tidak valid.'); }
+  };
+  r.readAsText(f);
+  e.target.value = '';
+}
+function resetData(){
+  if (!confirm('Hapus SEMUA data dan kembali ke contoh awal?')) return;
+  S = defaultState(); simpan(); render();
+}
+
+/* ============ RENDER ============ */
+function render(){
+  applyTheme();
+  renderDasbor();
+  renderTransaksi();
+  renderPortofolio();
+  renderTarget();
+  renderPengaturan();
+}
+render();
+
+/* self-check: buka index.html?cek=1 */
+if (new URLSearchParams(location.search).has('cek')) {
+  let expectKas = 0;
+  S.transaksi.forEach(t => {
+    if (t.tipe === 'masuk') expectKas += t.nominal;
+    else if (t.tipe === 'keluar' || t.tipe === 'beli') expectKas -= t.nominal;
+    else if (t.tipe === 'jual') expectKas += t.nominal;
+  });
+  const ok = rpParse('1.234.567') === 1234567
+    && kasNow() === expectKas
+    && nilaiAsetTotal() === S.aset.reduce((s,a) => s + nilaiAset(a), 0)
+    && investAset('BBRI') >= 0;
+  console.log(ok ? 'CEK OK' : 'CEK GAGAL');
+}
+</script>
+</body>
+</html>
