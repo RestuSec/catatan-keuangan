@@ -278,7 +278,7 @@
 
 </div>
 
-<footer class="foot">Catatan Keuangan · v6 · live via GitHub Pages</footer>
+<footer class="foot">Catatan Keuangan · v7 · live via GitHub Pages</footer>
 
 <!-- MODAL UMUM -->
 <div class="modal-bg" id="modal">
@@ -666,9 +666,10 @@ function renderDasbor(){
       <div class="sum-sub">rata-rata progres</div>
     </div>`;
 
-  gambarDonut('donutLokasi', 'legendLokasi', S.aset
-    .filter(a => nilaiAset(a) > 0)
-    .map(a => [a.nama, nilaiAset(a), a.warna || S.settings.accent]));
+  gambarDonut('donutLokasi', 'legendLokasi',
+    S.aset.filter(a => nilaiAset(a) > 0)
+      .map(a => [a.nama, nilaiAset(a), a.warna || S.settings.accent])
+      .concat(saldoKas() > 0 ? [['Saldo Kas', saldoKas(), '#22c55e']] : []));
 
   gambarDonut('donutKategori', 'legendKategori',
     sumBy(S.transaksi.filter(t => t.tipe === 'keluar')
