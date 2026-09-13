@@ -4,10 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Catatan Keuangan</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="vendor/chart.umd.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-database-compat.js"></script>
+<script src="vendor/firebase-auth-compat.js"></script>
 <style>
   :root{
     --bg:#0f1117;
@@ -154,18 +155,29 @@
     <div class="summary" id="summary"></div>
     <div class="grid">
       <div class="card">
-        <h2>Portofolio per Aset <small>nilai sekarang per aset</small></h2>
+        <h2>Portofolio per Aset <small>nilai sekarang · termasuk saldo kas</small></h2>
         <div class="chart-box"><canvas id="donutLokasi"></canvas></div>
         <div class="legend" id="legendLokasi"></div>
       </div>
+      <div class="card">
+        <h2>Pemasukan per Kategori <small>semua waktu</small></h2>
+        <div class="chart-box"><canvas id="donutMasuk"></canvas></div>
+        <div class="legend" id="legendMasuk"></div>
+      </div>
+    </div>
+    <div class="grid">
       <div class="card">
         <h2>Pengeluaran per Kategori <small>semua waktu · beli aset jadi "Investasi"</small></h2>
         <div class="chart-box"><canvas id="donutKategori"></canvas></div>
         <div class="legend" id="legendKategori"></div>
       </div>
+      <div class="card">
+        <h2>Total Kekayaan <small>6 bulan terakhir · kas bertambah aset dinilai saat ini</small></h2>
+        <div class="chart-box" style="height:280px"><canvas id="lineKekayaan"></canvas></div>
+      </div>
     </div>
     <div class="card">
-      <h2>Pemasukan vs Pengeluaran <small>per hari · hari tanpa transaksi disembunyikan</small></h2>
+      <h2>Pemasukan vs Pengeluaran <small>per hari · 30 hari terakhir, hari tanpa transaksi disembunyikan</small></h2>
       <div class="chart-box" style="height:230px"><canvas id="barBulan"></canvas></div>
     </div>
     <div class="card">
@@ -260,8 +272,8 @@
         </div>
       </div>
       <div class="field">
-        <label>Konfigurasi Firebase <span class="hint">— tempel dari console.firebase.google.com</span></label>
-        <textarea id="fbConfig" rows="5" spellcheck="false" placeholder='{ "apiKey": "...", "authDomain": "...", "databaseURL": "https://...firebasedatabase.app", "projectId": "..." }'></textarea>
+        <label>Konfigurasi Firebase <span class="hint">— opsional; kosongkan biar pakai bawaan (langsung bisa login)</span></label>
+        <textarea id="fbConfig" rows="5" spellcheck="false" placeholder='Kosongkan = pakai server bawaan. Isi hanya kalau pakai project sendiri.'></textarea>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn-primary btn-sm" onclick="hubungkanFirebase()">Hubungkan</button>
@@ -273,6 +285,7 @@
       <h2>Data</h2>
       <div class="toolbar">
         <button class="btn-ghost" onclick="ekspor()">📤 Ekspor JSON</button>
+        <button class="btn-ghost" onclick="eksporExcel()">📊 Ekspor Excel</button>
         <button class="btn-ghost" onclick="document.getElementById('fileImpor').click()">📥 Impor JSON</button>
         <input type="file" id="fileImpor" accept="application/json" onchange="impor(event)">
         <button class="btn-danger" onclick="resetData()">Reset Data</button>
@@ -282,7 +295,7 @@
 
 </div>
 
-<footer class="foot">Catatan Keuangan · v10 · live via GitHub Pages</footer>
+<footer class="foot">Catatan Keuangan · v11 · live via GitHub Pages</footer>
 
 <!-- MODAL UMUM -->
 <div class="modal-bg" id="modal">
@@ -577,13 +590,12 @@ function bulanKey(t){
 }
 
 /* ============ GRAFIK ============ */
-let donutLokasiChart, donutKategoriChart, barBulanChart;
+let donutLokasiChart, donutKategoriChart, donutMasukChart, barBulanChart, garisKekayaanChart;
 function gambarDonut(canvasId, legendId, segments){
   const labels = segments.map(s => s[0]);
   const data = segments.map(s => s[1]);
   const bg = segments.map(s => s[2]);
-  const ref = canvasId === 'donutLokasi';
-  const old = ref ? donutLokasiChart : donutKategoriChart;
+  const old = canvasId === 'donutLokasi' ? donutLokasiChart : canvasId === 'donutMasuk' ? donutMasukChart : donutKategoriChart;
   if (old) old.destroy();
   const sum = data.reduce((a,b) => a+b, 0);
   const c = new Chart(el(canvasId), {
@@ -595,11 +607,42 @@ function gambarDonut(canvasId, legendId, segments){
         tooltip: { callbacks: { label: x => ` ${x.label}: ${rp(x.raw)}` } } }
     }
   });
-  if (ref) donutLokasiChart = c; else donutKategoriChart = c;
+  if (canvasId === 'donutLokasi') donutLokasiChart = c; else if (canvasId === 'donutMasuk') donutMasukChart = c; else donutKategoriChart = c;
   el(legendId).innerHTML = sum
     ? labels.map((l,i) => `<div class="legend-item"><span class="dot" style="background:${bg[i]}"></span>${esc(l)}
         <b>${shortRp(data[i])}</b><span>${(data[i]/sum*100).toFixed(1)}%</span></div>`).join('')
     : '<div class="empty">Belum ada data</div>';
+}
+function gambarGaris(){
+  const now = new Date();
+  const labels = [], data = [];
+  for (let i = 5; i >= 0; i--) {
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+    const ek = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2,'0') + '-' + String(end.getDate()).padStart(2,'0');
+    let kas = 0;
+    S.transaksi.forEach(t => {
+      if (t.tanggal > ek) return;
+      if (t.tipe === 'masuk' || t.tipe === 'jual') kas += t.nominal;
+      else if (t.tipe === 'keluar' || t.tipe === 'beli') kas -= t.nominal;
+    });
+    labels.push(end.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }));
+    data.push(kas + nilaiAsetTotal());
+  }
+  if (garisKekayaanChart) garisKekayaanChart.destroy();
+  garisKekayaanChart = new Chart(el('lineKekayaan'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'Total Kekayaan', data, borderColor: S.settings.accent,
+      backgroundColor: 'rgba(79,140,255,.15)', fill: true, tension: .35, pointBackgroundColor: S.settings.accent, pointRadius: 3 }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: x => ` ${x.label}: ${rp(x.raw)}` } } },
+      scales: {
+        x: { grid: { display:false }, ticks: { color:'#8b90a3' } },
+        y: { grid: { color:'rgba(139,144,163,.15)' }, ticks: { color:'#8b90a3', callback: v => shortRp(v) } }
+      }
+    }
+  });
 }
 function gambarBar(){
   const now = new Date();
@@ -675,6 +718,10 @@ function renderDasbor(){
       .map(a => [a.nama, nilaiAset(a), a.warna || S.settings.accent])
       .concat(saldoKas() > 0 ? [['Saldo Kas', saldoKas(), '#22c55e']] : []));
 
+  gambarDonut('donutMasuk', 'legendMasuk',
+    sumBy(S.transaksi.filter(t => t.tipe === 'masuk')
+      .map(t => [t.kategori, t.nominal, warnaNama(t.kategori, S.settings.kategori.masuk)])));
+
   gambarDonut('donutKategori', 'legendKategori',
     sumBy(S.transaksi.filter(t => t.tipe === 'keluar')
       .map(t => [t.kategori, t.nominal, warnaNama(t.kategori, S.settings.kategori.keluar)]))
@@ -682,6 +729,7 @@ function renderDasbor(){
       .map(t => ['Investasi', t.nominal, S.settings.accent]))));
 
   gambarBar();
+  gambarGaris();
 
   el('targetCount').textContent = S.target.length + ' target';
   el('targetList').innerHTML = S.target.length
@@ -1038,6 +1086,28 @@ function ekspor(){
   a.click();
   URL.revokeObjectURL(a.href);
 }
+function eksporExcel(){
+  const tgl = () => new Date().toISOString().slice(0,10);
+  const barisRingkas = [
+    ['Saldo Kas', saldoKas()],
+    ['Total Aset (Portofolio)', nilaiAsetTotal()],
+    ['Total Kekayaan', nilaiAsetTotal() + saldoKas()],
+  ];
+  sumBy(S.transaksi.filter(t => t.tipe === 'masuk').map(t => [t.kategori, t.nominal, warnaNama(t.kategori, S.settings.kategori.masuk)])).forEach(s => barisRingkas.push(['Pemasukan · ' + s[0], s[1]]));
+  sumBy(S.transaksi.filter(t => t.tipe === 'keluar').map(t => [t.kategori, t.nominal, warnaNama(t.kategori, S.settings.kategori.keluar)])).forEach(s => barisRingkas.push(['Pengeluaran · ' + s[0], s[1]]));
+  const invBeli = sumBy(S.transaksi.filter(t => t.tipe === 'beli').map(t => ['Beli Aset', t.nominal, '']));
+  invBeli.forEach(s => barisRingkas.push(['Investasi · ' + s[0], s[1]]));
+  const transaksi = S.transaksi.map(t => [t.tanggal, TIPE_LABEL[t.tipe] || t.tipe, (t.nama || t.kategori || ''), (t.lokasi || ''), (t.nominal || 0), (t.catatan || '')]);
+  const aset = S.aset.map(a => [a.nama, a.jenis, investAset(a.nama), nilaiAset(a), labaAset(a)]);
+  const target = S.target.map(t => [t.nama, t.nominal, t.terkumpul, (t.nominal ? Math.min(100, t.terkumpul / t.nominal * 100) : 0)]);
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Ringkasan'], ...barisRingkas.map(r => [r[0], r[1]])]), 'Ringkasan');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Tanggal', 'Jenis', 'Kategori / Aset', 'Lokasi', 'Nominal', 'Catatan'], ...transaksi]), 'Transaksi');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Aset', 'Jenis', 'Modal (Dana Tertanam)', 'Nilai Sekarang', 'Laba'], ...aset]), 'Aset');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Target', 'Nominal', 'Terkumpul', 'Progres %'], ...target]), 'Target');
+  XLSX.writeFile(wb, `catatan-keuangan-${tgl()}.xlsx`);
+}
 function impor(e){
   const f = e.target.files[0];
   if (!f) return;
@@ -1061,6 +1131,14 @@ function resetData(){
 }
 
 /* ============ SINKRONISASI CLOUD (FIREBASE + AKUN) ============ */
+// Config bawaan: nggak perlu tempel apa-apa, cukup login/buat akun.
+// Data tetap terlindungi karena tiap akun cuma bisa baca/tulis node-nya sendiri.
+const DEFAULT_FB = {
+  apiKey: "AIzaSyBY6YDj1b3SjW5cTa7dys2kGIaCVIpSIgI",
+  authDomain: "catatan-keuangan-c9107.firebaseapp.com",
+  databaseURL: "https://catatan-keuangan-c9107-default-rtdb.firebaseio.com",
+  projectId: "catatan-keuangan-c9107"
+};
 let fbApp = null, fbDb = null, fbAuth = null, fbSync = false, lastLocalWrite = 0, fbUid = null;
 function fbNamaKunci(){ return fbUid ? ('user/' + fbUid) : ''; }
 function fbRef(){ return fbDb && fbNamaKunci() ? fbDb.ref('data/' + fbNamaKunci()) : null; }
@@ -1165,15 +1243,15 @@ function disconnectFirebase(){
 function muatKoneksi(){
   try {
     const raw = localStorage.getItem('fbConfig');
-    if (!raw) { statusFb('Belum diatur — tempel konfigurasi lalu Hubungkan'); return false; }
-    initFirebase(JSON.parse(raw));
+    initFirebase(raw ? JSON.parse(raw) : DEFAULT_FB);
     return true;
   } catch (e) { statusFb('Gagal baca config: ' + e.message); return false; }
 }
 function hubungkanFirebase(){
   const raw = el('fbConfig').value.trim();
-  if (!raw) return alert('Tempel konfigurasi Firebase dulu.');
-  try { localStorage.setItem('fbConfig', raw); initFirebase(JSON.parse(raw)); }
+  const cfg = raw ? (() => { try { return JSON.parse(raw); } catch (e) { alert('Config tidak valid: ' + e.message); return null; } })() : DEFAULT_FB;
+  if (!cfg) return;
+  try { if (raw) localStorage.setItem('fbConfig', raw); initFirebase(cfg); }
   catch (e) { alert('Config tidak valid: ' + e.message); }
 }
 function putuskanFirebase(){
@@ -1183,13 +1261,13 @@ function putuskanFirebase(){
 function buatAkun(){
   const e = el('authEmail').value.trim(), p = el('authPass').value;
   if (!e || !p) return alert('Isi email & sandi (min 6 karakter) dulu.');
-  if (!fbAuth) return alert('Tempel konfigurasi Firebase & tekan Hubungkan dulu.');
+  if (!fbAuth) return alert('Sedang menyiapkan koneksi… coba lagi sebentar.');
   fbAuth.createUserWithEmailAndPassword(e, p).then(() => statusFb('Akun dibuat & terhubung.')).catch(err => statusFb('Gagal buat akun: ' + err.message));
 }
 function masukAkun(){
   const e = el('authEmail').value.trim(), p = el('authPass').value;
   if (!e || !p) return alert('Isi email & sandi dulu.');
-  if (!fbAuth) return alert('Tempel konfigurasi Firebase & tekan Hubungkan dulu.');
+  if (!fbAuth) return alert('Sedang menyiapkan koneksi… coba lagi sebentar.');
   fbAuth.signInWithEmailAndPassword(e, p).catch(err => statusFb('Gagal masuk: ' + err.message));
 }
 function keluarAkun(){ if (fbAuth) fbAuth.signOut(); }
