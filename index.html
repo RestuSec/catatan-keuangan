@@ -703,6 +703,7 @@ function txTog(){
   el('regionAset').classList.toggle('hidden', !aset);
   el('regionKatLok').classList.toggle('hidden', aset);
   if (aset) el('dlAset').innerHTML = S.aset.map(a => `<option value="${esc(a.nama)}">`).join('');
+  else el('fKategori').innerHTML = txKategoriOptions(v);
 }
 function autoJenis(v){
   const a = asetByNama(v);
