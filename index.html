@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Catatan Keuangan</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
   :root{
     --bg:#0f1117;
@@ -243,6 +245,26 @@
       <div id="aturAset"></div>
     </div>
     <div class="card">
+      <h2>Sinkronisasi Cloud <small>biar data sama di HP & laptop</small></h2>
+      <div class="field">
+        <label>Kode Pengguna <span class="hint">— pakai kode yang SAMA di HP & laptop biar datanya nyatu</span></label>
+        <input id="fbKode" placeholder="cth: abc123">
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn-ghost btn-sm" onclick="acakKodeFb()">Acak</button>
+          <button class="btn-ghost btn-sm" onclick="simpanKodeFb()">Simpan Kode</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Konfigurasi Firebase <span class="hint">— tempel dari console.firebase.google.com</span></label>
+        <textarea id="fbConfig" rows="5" spellcheck="false" placeholder='{ "apiKey": "...", "authDomain": "...", "databaseURL": "https://...firebasedatabase.app", "projectId": "..." }'></textarea>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn-primary btn-sm" onclick="hubungkanFirebase()">Hubungkan</button>
+        <button class="btn-ghost btn-sm" onclick="putuskanFirebase()">Putuskan</button>
+        <span id="fbStatus" style="font-size:13px">Belum diatur.</span>
+      </div>
+    </div>
+    <div class="card">
       <h2>Data</h2>
       <div class="toolbar">
         <button class="btn-ghost" onclick="ekspor()">📤 Ekspor JSON</button>
@@ -299,6 +321,7 @@ const JENIS_ASET = ['Saham','Reksadana','Kripto','Emas','Obligasi','Properti','L
 const TIPE_LABEL = { masuk:'Pemasukan', keluar:'Pengeluaran', beli:'Beli Aset', jual:'Jual Aset' };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const acak = n => Math.random().toString(36).slice(2, 2 + n);
 const el = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const rp = n => 'Rp ' + Math.round(n).toLocaleString('id-ID');
@@ -319,7 +342,7 @@ function defaultState(){
   const m = n => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
   return {
     settings: {
-      namaApp: 'Catatan Keuangan', bg: '#0f1117', card: '#1a1d29', accent: '#4f8cff', text: '#e8eaf0', light: false,
+      namaApp: 'Catatan Keuangan', bg: '#0f1117', card: '#1a1d29', accent: '#4f8cff', text: '#e8eaf0', light: false, kode: acak(6),
       kategori: {
         masuk: [{id:uid(), nama:'Gaji', warna:'#22c55e'}, {id:uid(), nama:'Jualan', warna:'#06b6d4'}],
         keluar: [
@@ -362,6 +385,13 @@ function defaultState(){
     ],
   };
 }
+function normalizeD(d){
+  d.settings = d.settings || {};
+  if (!d.settings.kode) d.settings.kode = acak(6);
+  d.aset = d.aset || [];
+  d.aset.forEach(a => { if (!a.warna) a.warna = warnaAsetBaru(d); });
+  return d;
+}
 function muat(){
   try {
     const raw = localStorage.getItem(KEY);
@@ -392,14 +422,14 @@ function muat(){
           a.hargaSekarang = a.hargaSekarang > 0 ? a.hargaSekarang : a.hargaBeli;
           if (!a.warna) a.warna = warnaAsetBaru(d);
         });
-        return d;
+        return normalizeD(d);
       }
     }
   } catch (e) {}
   return defaultState();
 }
 let S = muat();
-const simpan = () => localStorage.setItem(KEY, JSON.stringify(S));
+const simpan = () => { localStorage.setItem(KEY, JSON.stringify(S)); pushFirebase(); };
 
 /* ============ TEMA ============ */
 function shade(hex, percent){
@@ -928,6 +958,8 @@ function renderPengaturan(){
     barisAtr(x, `gantiNamaLokasi('${x.id}')`, `gantiWarnaLokasi('${x.id}')`, `hapusLokasi('${x.id}')`)).join('');
   el('aturAset').innerHTML = S.aset.map(x =>
     barisAtr(x, `gantiNamaAset('${x.id}')`, `gantiWarnaAset('${x.id}')`, `hapusAset('${x.id}')`)).join('');
+  el('fbKode').value = S.settings.kode || acak(6);
+  el('fbConfig').value = localStorage.getItem('fbConfig') || '';
 }
 function gantiNamaAset(id, nama){
   const item = S.aset.find(x => x.id === id);
@@ -1013,6 +1045,85 @@ function resetData(){
   S = defaultState(); simpan(); render();
 }
 
+/* ============ SINKRONISASI CLOUD (FIREBASE) ============ */
+let fbApp = null, fbDb = null, fbSync = false;
+function fbNamaKunci(){ return S.settings.kode || acak(6); }
+function fbRef(){ return fbDb ? fbDb.ref('data/' + fbNamaKunci()) : null; }
+function statusFb(msg, ok){
+  const s = el('fbStatus');
+  if (!s) return;
+  s.innerHTML = (ok ? '✓ ' : '✕ ') + esc(msg);
+  s.style.color = ok ? 'var(--green)' : 'var(--red)';
+}
+function pushFirebase(){
+  if (!fbDb || !fbSync) return;
+  // ponytail: seluruh state di-set sekali tiap simpan (last-write-wins).
+  // Kalau 2 perangkat sering edit barengan & saling timpa, upgrade ke per-record update.
+  fbRef().set(JSON.parse(JSON.stringify(S)));
+}
+function initFirebase(cfg){
+  if (!cfg || !cfg.apiKey || !cfg.databaseURL) throw new Error('Config kurang lengkap (butuh apiKey & databaseURL).');
+  if (fbApp) fbApp.delete();
+  fbApp = firebase.initializeApp({
+    apiKey: cfg.apiKey, authDomain: cfg.authDomain || '', databaseURL: cfg.databaseURL, projectId: cfg.projectId || ''
+  }, 'ck' + Date.now());
+  fbDb = firebase.database(fbApp);
+  const ref = fbRef();
+  statusFb('Menghubungkan…');
+  ref.once('value', snap => {
+    const d = snap.val();
+    if (d && d.transaksi) {
+      if (JSON.stringify(d) !== JSON.stringify(S)) { S = normalizeD(d); simpan(); }
+    } else {
+      ref.set(JSON.parse(JSON.stringify(S)));
+    }
+    fbSync = true;
+    statusFb('Terhubung · sinkron realtime', true);
+  }, err => {
+    fbSync = true;
+    statusFb('Gagal konek: ' + (err && err.message ? err.message : err));
+  });
+  ref.on('value', snap => {
+    if (!fbSync) return;
+    const d = snap.val();
+    if (d && d.transaksi && JSON.stringify(d) !== JSON.stringify(S)) {
+      S = normalizeD(d); simpan();
+    }
+  });
+}
+function disconnectFirebase(){
+  return new Promise(res => {
+    if (fbDb) fbRef().off();
+    if (fbApp) fbApp.delete().then(() => { fbApp = null; fbDb = null; fbSync = false; res(); });
+    else { fbDb = null; fbSync = false; res(); }
+  });
+}
+function muatKoneksi(){
+  try {
+    const raw = localStorage.getItem('fbConfig');
+    if (!raw) { statusFb('Belum diatur — isi konfigurasi lalu Hubungkan'); return false; }
+    initFirebase(JSON.parse(raw));
+    return true;
+  } catch (e) { statusFb('Gagal baca config: ' + e.message); return false; }
+}
+function hubungkanFirebase(){
+  const raw = el('fbConfig').value.trim();
+  if (!raw) return alert('Tempel konfigurasi Firebase dulu.');
+  try { localStorage.setItem('fbConfig', raw); initFirebase(JSON.parse(raw)); }
+  catch (e) { alert('Config tidak valid: ' + e.message); }
+}
+function putuskanFirebase(){
+  if (!fbDb) return;
+  disconnectFirebase().then(() => localStorage.removeItem('fbConfig'));
+}
+function acakKodeFb(){ el('fbKode').value = acak(6); }
+function simpanKodeFb(){
+  const k = el('fbKode').value.trim();
+  S.settings.kode = k === '' ? acak(6) : k;
+  simpan(); renderPengaturan();
+  if (fbDb) disconnectFirebase().then(muatKoneksi);
+}
+
 /* ============ RENDER ============ */
 function render(){
   applyTheme();
@@ -1023,6 +1134,7 @@ function render(){
   renderPengaturan();
 }
 render();
+muatKoneksi();
 
 /* self-check: buka index.html?cek=1 */
 if (new URLSearchParams(location.search).has('cek')) {
