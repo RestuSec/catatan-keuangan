@@ -278,7 +278,7 @@
 
 </div>
 
-<footer class="foot">Catatan Keuangan · v8 · live via GitHub Pages</footer>
+<footer class="foot">Catatan Keuangan · v9 · live via GitHub Pages</footer>
 
 <!-- MODAL UMUM -->
 <div class="modal-bg" id="modal">
@@ -1156,7 +1156,7 @@ function hubungkanFirebase(){
   const raw = el('fbConfig').value.trim();
   if (!raw) return alert('Tempel konfigurasi Firebase dulu.');
   const k = el('fbKode').value.trim();
-  if (k && k !== S.settings.kode) { S.settings.kode = k; simpan(); }
+  if (k) { S.settings.kode = k; lastLocalWrite = 0; localStorage.setItem(KEY, JSON.stringify(S)); }
   try { localStorage.setItem('fbConfig', raw); initFirebase(JSON.parse(raw)); }
   catch (e) { alert('Config tidak valid: ' + e.message); }
 }
@@ -1168,8 +1168,11 @@ function acakKodeFb(){ el('fbKode').value = acak(6); }
 function simpanKodeFb(){
   const k = el('fbKode').value.trim();
   S.settings.kode = k === '' ? acak(6) : k;
-  simpan(); renderPengaturan();
+  lastLocalWrite = 0;
+  localStorage.setItem(KEY, JSON.stringify(S));
+  renderPengaturan();
   if (fbDb) disconnectFirebase().then(muatKoneksi);
+  else muatKoneksi();
 }
 
 /* ============ RENDER ============ */
