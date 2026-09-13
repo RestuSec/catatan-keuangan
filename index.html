@@ -278,7 +278,7 @@
 
 </div>
 
-<footer class="foot">Catatan Keuangan · v7 · live via GitHub Pages</footer>
+<footer class="foot">Catatan Keuangan · v8 · live via GitHub Pages</footer>
 
 <!-- MODAL UMUM -->
 <div class="modal-bg" id="modal">
@@ -1111,7 +1111,7 @@ function cekRemote(d){
   if (JSON.stringify(c) === JSON.stringify(S)) return;
   if (lastLocalWrite === 0) S = normalizeD(gabungDua(c, S));
   else S = normalizeD(c);
-  simpan();
+  simpan(); render();
 }
 function initFirebase(cfg){
   if (!cfg || !cfg.apiKey || !cfg.databaseURL) throw new Error('Config kurang lengkap (butuh apiKey & databaseURL).');
@@ -1155,6 +1155,8 @@ function muatKoneksi(){
 function hubungkanFirebase(){
   const raw = el('fbConfig').value.trim();
   if (!raw) return alert('Tempel konfigurasi Firebase dulu.');
+  const k = el('fbKode').value.trim();
+  if (k && k !== S.settings.kode) { S.settings.kode = k; simpan(); }
   try { localStorage.setItem('fbConfig', raw); initFirebase(JSON.parse(raw)); }
   catch (e) { alert('Config tidak valid: ' + e.message); }
 }
