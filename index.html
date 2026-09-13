@@ -7,6 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
   :root{
     --bg:#0f1117;
@@ -248,11 +249,14 @@
     <div class="card">
       <h2>Sinkronisasi Cloud <small>biar data sama di HP & laptop</small></h2>
       <div class="field">
-        <label>Kode Pengguna <span class="hint">— pakai kode yang SAMA di HP & laptop biar datanya nyatu</span></label>
-        <input id="fbKode" placeholder="cth: abc123">
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button class="btn-ghost btn-sm" onclick="acakKodeFb()">Acak</button>
-          <button class="btn-ghost btn-sm" onclick="simpanKodeFb()">Simpan Kode</button>
+        <label>Akun <span class="hint">— wajib: buat akun sekali, login di HP & laptop biar datanya nyatu</span></label>
+        <input id="authEmail" type="email" placeholder="email@contoh.com" autocomplete="username">
+        <input id="authPass" type="password" placeholder="sandi (min 6 karakter)" style="margin-top:8px" autocomplete="current-password">
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn-ghost btn-sm" onclick="buatAkun()">Buat Akun</button>
+          <button class="btn-ghost btn-sm" onclick="masukAkun()">Masuk</button>
+          <button class="btn-ghost btn-sm hidden" id="btnKeluar" onclick="keluarAkun()">Keluar</button>
+          <span id="authStatus" style="font-size:13px">Belum masuk.</span>
         </div>
       </div>
       <div class="field">
@@ -278,7 +282,7 @@
 
 </div>
 
-<footer class="foot">Catatan Keuangan · v9 · live via GitHub Pages</footer>
+<footer class="foot">Catatan Keuangan · v10 · live via GitHub Pages</footer>
 
 <!-- MODAL UMUM -->
 <div class="modal-bg" id="modal">
@@ -970,7 +974,6 @@ function renderPengaturan(){
     barisAtr(x, `v=>gantiNamaLokasi('${x.id}',v)`, `v=>gantiWarnaLokasi('${x.id}',v)`, `hapusLokasi('${x.id}')`)).join('');
   el('aturAset').innerHTML = S.aset.map(x =>
     barisAtr(x, `v=>gantiNamaAset('${x.id}',v)`, `v=>gantiWarnaAset('${x.id}',v)`, `hapusAset('${x.id}')`)).join('');
-  el('fbKode').value = S.settings.kode || acak(6);
   el('fbConfig').value = localStorage.getItem('fbConfig') || '';
 }
 function gantiNamaAset(id, nama){
@@ -1057,10 +1060,10 @@ function resetData(){
   S = defaultState(); simpan(); render();
 }
 
-/* ============ SINKRONISASI CLOUD (FIREBASE) ============ */
-let fbApp = null, fbDb = null, fbSync = false, lastLocalWrite = 0;
-function fbNamaKunci(){ return S.settings.kode || acak(6); }
-function fbRef(){ return fbDb ? fbDb.ref('data/' + fbNamaKunci()) : null; }
+/* ============ SINKRONISASI CLOUD (FIREBASE + AKUN) ============ */
+let fbApp = null, fbDb = null, fbAuth = null, fbSync = false, lastLocalWrite = 0, fbUid = null;
+function fbNamaKunci(){ return fbUid ? ('user/' + fbUid) : ''; }
+function fbRef(){ return fbDb && fbNamaKunci() ? fbDb.ref('data/' + fbNamaKunci()) : null; }
 function statusFb(msg, ok){
   const s = el('fbStatus');
   if (!s) return;
@@ -1074,10 +1077,15 @@ function payloadCloud(){
   return out;
 }
 function pushFirebase(){
-  if (!fbDb || !fbSync) return;
+  if (!fbDb || !fbSync || !fbNamaKunci()) return;
   // ponytail: seluruh state di-set sekali tiap simpan, ditandai waktu tulis.
   // Data yang lebih lama tidak pernah menimpa yang lebih baru.
   fbRef().set(payloadCloud());
+}
+function asetUIlogin(){
+  const u = fbAuth && fbAuth.currentUser;
+  const st = el('authStatus'); if (st) st.textContent = u ? ('Masuk sebagai ' + u.email) : 'Belum masuk.';
+  const bk = el('btnKeluar'); if (bk) bk.classList.toggle('hidden', !u);
 }
 function gabungList(atas, lokal){
   const m = new Map();
@@ -1113,6 +1121,30 @@ function cekRemote(d){
   else S = normalizeD(c);
   simpan(); render();
 }
+function alurSink(){
+  const u = fbAuth && fbAuth.currentUser;
+  asetUIlogin();
+  if (!u) { fbUid = null; fbSync = false; return; }
+  fbUid = u.uid;
+  if (fbRef()) {
+    const ref = fbRef();
+    statusFb('Menghubungkan…');
+    ref.once('value', snap => {
+      const d = snap.val();
+      if (d && d.transaksi) cekRemote(d);
+      else ref.set(payloadCloud());
+      fbSync = true;
+      statusFb('Terhubung · sinkron realtime', true);
+    }, err => {
+      fbSync = true;
+      statusFb('Gagal konek: ' + (err && err.message ? err.message : err));
+    });
+    ref.on('value', snap => { if (fbSync) cekRemote(snap.val()); });
+  }
+}
+function checkAuthMetode(){
+  return !!(fbAuth && fbAuth.currentUser);
+}
 function initFirebase(cfg){
   if (!cfg || !cfg.apiKey || !cfg.databaseURL) throw new Error('Config kurang lengkap (butuh apiKey & databaseURL).');
   if (fbApp) fbApp.delete();
@@ -1120,34 +1152,20 @@ function initFirebase(cfg){
     apiKey: cfg.apiKey, authDomain: cfg.authDomain || '', databaseURL: cfg.databaseURL, projectId: cfg.projectId || ''
   }, 'ck' + Date.now());
   fbDb = firebase.database(fbApp);
-  const ref = fbRef();
-  statusFb('Menghubungkan…');
-  ref.once('value', snap => {
-    const d = snap.val();
-    if (d && d.transaksi) cekRemote(d);
-    else ref.set(payloadCloud());
-    fbSync = true;
-    statusFb('Terhubung · sinkron realtime', true);
-  }, err => {
-    fbSync = true;
-    statusFb('Gagal konek: ' + (err && err.message ? err.message : err));
-  });
-  ref.on('value', snap => {
-    if (!fbSync) return;
-    cekRemote(snap.val());
-  });
+  fbAuth = firebase.auth(fbApp);
+  fbAuth.onAuthStateChanged(u => alurSink());
 }
 function disconnectFirebase(){
   return new Promise(res => {
-    if (fbDb) fbRef().off();
-    if (fbApp) fbApp.delete().then(() => { fbApp = null; fbDb = null; fbSync = false; res(); });
+    if (fbDb && fbRef()) fbRef().off();
+    if (fbApp) fbApp.delete().then(() => { fbApp = null; fbDb = null; fbAuth = null; fbSync = false; res(); });
     else { fbDb = null; fbSync = false; res(); }
   });
 }
 function muatKoneksi(){
   try {
     const raw = localStorage.getItem('fbConfig');
-    if (!raw) { statusFb('Belum diatur — isi konfigurasi lalu Hubungkan'); return false; }
+    if (!raw) { statusFb('Belum diatur — tempel konfigurasi lalu Hubungkan'); return false; }
     initFirebase(JSON.parse(raw));
     return true;
   } catch (e) { statusFb('Gagal baca config: ' + e.message); return false; }
@@ -1155,8 +1173,6 @@ function muatKoneksi(){
 function hubungkanFirebase(){
   const raw = el('fbConfig').value.trim();
   if (!raw) return alert('Tempel konfigurasi Firebase dulu.');
-  const k = el('fbKode').value.trim();
-  if (k) { S.settings.kode = k; lastLocalWrite = 0; localStorage.setItem(KEY, JSON.stringify(S)); }
   try { localStorage.setItem('fbConfig', raw); initFirebase(JSON.parse(raw)); }
   catch (e) { alert('Config tidak valid: ' + e.message); }
 }
@@ -1164,16 +1180,19 @@ function putuskanFirebase(){
   if (!fbDb) return;
   disconnectFirebase().then(() => localStorage.removeItem('fbConfig'));
 }
-function acakKodeFb(){ el('fbKode').value = acak(6); }
-function simpanKodeFb(){
-  const k = el('fbKode').value.trim();
-  S.settings.kode = k === '' ? acak(6) : k;
-  lastLocalWrite = 0;
-  localStorage.setItem(KEY, JSON.stringify(S));
-  renderPengaturan();
-  if (fbDb) disconnectFirebase().then(muatKoneksi);
-  else muatKoneksi();
+function buatAkun(){
+  const e = el('authEmail').value.trim(), p = el('authPass').value;
+  if (!e || !p) return alert('Isi email & sandi (min 6 karakter) dulu.');
+  if (!fbAuth) return alert('Tempel konfigurasi Firebase & tekan Hubungkan dulu.');
+  fbAuth.createUserWithEmailAndPassword(e, p).then(() => statusFb('Akun dibuat & terhubung.')).catch(err => statusFb('Gagal buat akun: ' + err.message));
 }
+function masukAkun(){
+  const e = el('authEmail').value.trim(), p = el('authPass').value;
+  if (!e || !p) return alert('Isi email & sandi dulu.');
+  if (!fbAuth) return alert('Tempel konfigurasi Firebase & tekan Hubungkan dulu.');
+  fbAuth.signInWithEmailAndPassword(e, p).catch(err => statusFb('Gagal masuk: ' + err.message));
+}
+function keluarAkun(){ if (fbAuth) fbAuth.signOut(); }
 
 /* ============ RENDER ============ */
 function render(){
