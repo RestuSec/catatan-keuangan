@@ -951,6 +951,10 @@ function barisAtr(item, onNama, onWarna, onHapus){
   </div>`;
 }
 function renderPengaturan(){
+  try {
+    const ae = document.activeElement;
+    if (ae && ae !== document.body && [el('kategori-masuk'), el('kategori-keluar'), el('aturLokasi'), el('aturAset')].some(c => c && c.contains(ae))) return;
+  } catch (e) {}
   el('kategori-masuk').innerHTML = S.settings.kategori.masuk.map(x =>
     barisAtr(x, `gantiNamaKategori('masuk','${x.id}')`, `gantiWarnaKategori('masuk','${x.id}')`, `hapusKategori('masuk','${x.id}')`)).join('');
   el('kategori-keluar').innerHTML = S.settings.kategori.keluar.map(x =>
@@ -1068,7 +1072,29 @@ function pushFirebase(){
   // Data yang lebih lama tidak pernah menimpa yang lebih baru.
   fbRef().set(payloadCloud());
 }
-// Terima data remote. Cuma diadopsi kalau lebih baru dari tulis lokal terakhir.
+function gabungList(atas, lokal){
+  const m = new Map();
+  (atas || []).forEach(x => m.set(x.id, x));
+  (lokal || []).forEach(x => { if (!m.has(x.id)) m.set(x.id, x); });
+  return Array.from(m.values());
+}
+// Gabung state cloud + lokal pas first connect. Yang cuma ada di lokal (mis. kategori baru)
+// nggak dibuang; yang ada di dua-duanya (id sama) pakai versi cloud.
+function gabungDua(c, l){
+  const r = {
+    settings: Object.assign({}, l.settings, c.settings || {}),
+    transaksi: gabungList(c.transaksi, l.transaksi),
+    aset: gabungList(c.aset, l.aset),
+    target: gabungList(c.target, l.target),
+  };
+  ['masuk', 'keluar'].forEach(ti => {
+    r.settings.kategori[ti] = gabungList((c.settings && c.settings.kategori && c.settings.kategori[ti]), (l.settings.kategori || {})[ti]);
+  });
+  r.settings.lokasi = gabungList(c.settings && c.settings.lokasi, l.settings.lokasi);
+  return r;
+}
+// Terima data remote. Saat sesi jalan (lastLocalWrite>0): hanya diadopsi kalau lebih baru.
+// Saat first connect: digabung dengan data lokal biar kerjaan baru nggak ilang.
 function cekRemote(d){
   if (!d || !d.transaksi) return;
   const w = d.__w || 0;
@@ -1076,7 +1102,9 @@ function cekRemote(d){
   const c = JSON.parse(JSON.stringify(d));
   delete c.__w;
   if (JSON.stringify(c) === JSON.stringify(S)) return;
-  S = normalizeD(c); simpan();
+  if (lastLocalWrite === 0) S = normalizeD(gabungDua(c, S));
+  else S = normalizeD(c);
+  simpan();
 }
 function initFirebase(cfg){
   if (!cfg || !cfg.apiKey || !cfg.databaseURL) throw new Error('Config kurang lengkap (butuh apiKey & databaseURL).');
