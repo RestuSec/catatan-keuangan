@@ -277,7 +277,7 @@
 
 </div>
 
-<footer class="foot">Catatan Keuangan · live via GitHub Pages</footer>
+<footer class="foot">Catatan Keuangan · v4 · live via GitHub Pages</footer>
 
 <!-- MODAL UMUM -->
 <div class="modal-bg" id="modal">
@@ -946,7 +946,10 @@ function hapusTarget(id){
 function barisAtr(item, onNama, onWarna, onHapus){
   return `<div class="baris-atr">
     <input type="color" value="${item.warna}" onchange="${onWarna}(this.value)">
-    <input type="text" value="${esc(item.nama)}" onchange="${onNama}(this.value)">
+    <input type="text" value="${esc(item.nama)}"
+      oninput="clearTimeout(this._t);this._t=setTimeout(()=>${onNama}(this.value),400)"
+      onchange="${onNama}(this.value)"
+      onkeydown="if(event.key==='Enter'){this.blur()}">
     <button class="btn-danger btn-sm" onclick="${onHapus}()">✕</button>
   </div>`;
 }
