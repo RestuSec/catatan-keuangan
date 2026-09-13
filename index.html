@@ -277,7 +277,7 @@
 
 </div>
 
-<footer class="foot">Catatan Keuangan · v4 · live via GitHub Pages</footer>
+<footer class="foot">Catatan Keuangan · v5 · live via GitHub Pages</footer>
 
 <!-- MODAL UMUM -->
 <div class="modal-bg" id="modal">
@@ -945,10 +945,10 @@ function hapusTarget(id){
 /* ============ PENGATURAN ============ */
 function barisAtr(item, onNama, onWarna, onHapus){
   return `<div class="baris-atr">
-    <input type="color" value="${item.warna}" onchange="${onWarna}(this.value)">
+    <input type="color" value="${item.warna}" onchange="(${onWarna})(this.value)">
     <input type="text" value="${esc(item.nama)}"
-      oninput="clearTimeout(this._t);this._t=setTimeout(()=>${onNama}(this.value),400)"
-      onchange="${onNama}(this.value)"
+      oninput="clearTimeout(this._t);this._t=setTimeout(()=>(${onNama})(this.value),400)"
+      onchange="(${onNama})(this.value)"
       onkeydown="if(event.key==='Enter'){this.blur()}">
     <button class="btn-danger btn-sm" onclick="${onHapus}()">✕</button>
   </div>`;
@@ -959,13 +959,13 @@ function renderPengaturan(){
     if (ae && ae !== document.body && [el('kategori-masuk'), el('kategori-keluar'), el('aturLokasi'), el('aturAset')].some(c => c && c.contains(ae))) return;
   } catch (e) {}
   el('kategori-masuk').innerHTML = S.settings.kategori.masuk.map(x =>
-    barisAtr(x, `gantiNamaKategori('masuk','${x.id}')`, `gantiWarnaKategori('masuk','${x.id}')`, `hapusKategori('masuk','${x.id}')`)).join('');
+    barisAtr(x, `v=>gantiNamaKategori('masuk','${x.id}',v)`, `v=>gantiWarnaKategori('masuk','${x.id}',v)`, `hapusKategori('masuk','${x.id}')`)).join('');
   el('kategori-keluar').innerHTML = S.settings.kategori.keluar.map(x =>
-    barisAtr(x, `gantiNamaKategori('keluar','${x.id}')`, `gantiWarnaKategori('keluar','${x.id}')`, `hapusKategori('keluar','${x.id}')`)).join('');
+    barisAtr(x, `v=>gantiNamaKategori('keluar','${x.id}',v)`, `v=>gantiWarnaKategori('keluar','${x.id}',v)`, `hapusKategori('keluar','${x.id}')`)).join('');
   el('aturLokasi').innerHTML = S.settings.lokasi.map(x =>
-    barisAtr(x, `gantiNamaLokasi('${x.id}')`, `gantiWarnaLokasi('${x.id}')`, `hapusLokasi('${x.id}')`)).join('');
+    barisAtr(x, `v=>gantiNamaLokasi('${x.id}',v)`, `v=>gantiWarnaLokasi('${x.id}',v)`, `hapusLokasi('${x.id}')`)).join('');
   el('aturAset').innerHTML = S.aset.map(x =>
-    barisAtr(x, `gantiNamaAset('${x.id}')`, `gantiWarnaAset('${x.id}')`, `hapusAset('${x.id}')`)).join('');
+    barisAtr(x, `v=>gantiNamaAset('${x.id}',v)`, `v=>gantiWarnaAset('${x.id}',v)`, `hapusAset('${x.id}')`)).join('');
   el('fbKode').value = S.settings.kode || acak(6);
   el('fbConfig').value = localStorage.getItem('fbConfig') || '';
 }
