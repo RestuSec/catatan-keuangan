@@ -183,9 +183,10 @@
           <option value="semua">Semua</option>
           <option value="masuk">Pemasukan</option>
           <option value="keluar">Pengeluaran</option>
-          <option value="beli">Beli Aset</option>
-          <option value="jual">Jual Aset</option>
-        </select>
+<option value="beli">Beli Aset</option>
+        <option value="asetawal">Aset (sudah punya)</option>
+        <option value="jual">Jual Aset</option>
+      </select>
         <input class="search" id="cariTransaksi" placeholder="Cari..." oninput="renderTransaksi()">
       </div>
       <div style="overflow-x:auto">
@@ -277,7 +278,7 @@
 
 </div>
 
-<footer class="foot">Catatan Keuangan · v5 · live via GitHub Pages</footer>
+<footer class="foot">Catatan Keuangan · v6 · live via GitHub Pages</footer>
 
 <!-- MODAL UMUM -->
 <div class="modal-bg" id="modal">
@@ -318,7 +319,7 @@ const warnaAsetBaru = d => {
   return PALETTE.find(c => !dipakai.has(c)) || PALETTE[0];
 };
 const JENIS_ASET = ['Saham','Reksadana','Kripto','Emas','Obligasi','Properti','Lainnya'];
-const TIPE_LABEL = { masuk:'Pemasukan', keluar:'Pengeluaran', beli:'Beli Aset', jual:'Jual Aset' };
+const TIPE_LABEL = { masuk:'Pemasukan', keluar:'Pengeluaran', beli:'Beli Aset', jual:'Jual Aset', asetawal:'Aset (sudah punya)' };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 const acak = n => Math.random().toString(36).slice(2, 2 + n);
@@ -534,7 +535,7 @@ function investAset(nama, excludeId){
   let s = 0;
   for (const t of S.transaksi) {
     if (t.id === excludeId) continue;
-    if (t.tipe === 'beli' && t.nama === nama) s += t.nominal;
+    if ((t.tipe === 'beli' || t.tipe === 'asetawal') && t.nama === nama) s += t.nominal;
     else if (t.tipe === 'jual' && t.nama === nama) s -= t.nominal;
   }
   return Math.max(s, 0);
@@ -699,7 +700,7 @@ function lokasiOptions(pilih){
 }
 function txTog(){
   const v = el('fTipe').value;
-  const aset = v === 'beli' || v === 'jual';
+  const aset = v === 'beli' || v === 'jual' || v === 'asetawal';
   el('regionAset').classList.toggle('hidden', !aset);
   el('regionKatLok').classList.toggle('hidden', aset);
   if (aset) el('dlAset').innerHTML = S.aset.map(a => `<option value="${esc(a.nama)}">`).join('');
@@ -719,6 +720,7 @@ function modalTransaksi(id){
         <option value="masuk">Pemasukan</option>
         <option value="keluar">Pengeluaran</option>
         <option value="beli">Beli Aset</option>
+        <option value="asetawal">Aset (sudah punya)</option>
         <option value="jual">Jual Aset</option>
       </select>
     </div>
@@ -765,11 +767,12 @@ function modalTransaksi(id){
     simpan(); tutupModal(); render();
   });
   el('fTipe').value = tipe;
-  if (tipe === 'beli' || tipe === 'jual') { txTog(); autoJenis(t && t.nama); }
-  else {
+  if (tipe === 'keluar' || tipe === 'masuk') {
     const titular = t && t.tipe;
     el('fKategori').innerHTML = txKategoriOptions(tipe, t && t.kategori);
     el('fLokasi').innerHTML = lokasiOptions(t && t.lokasi);
+  } else {
+    txTog(); autoJenis(t && t.nama);
   }
 }
 function keyTanggal(d){
@@ -786,15 +789,15 @@ function tanggalRow(tanggal){
   return `<tr class="trx-date"><td colspan="5">${label}</td></tr>`;
 }
 function transaksiRow(t){
-  const aset = t.tipe === 'beli' || t.tipe === 'jual';
+  const aset = t.tipe === 'beli' || t.tipe === 'jual' || t.tipe === 'asetawal';
   const naik = t.tipe === 'masuk' || t.tipe === 'jual';
   const nm = aset ? t.nama : t.kategori;
   let wr;
   if (!aset) wr = warnaNama(t.kategori, t.tipe === 'masuk' ? S.settings.kategori.masuk : S.settings.kategori.keluar);
-  else if (t.tipe === 'beli') wr = (asetByNama(t.nama) || {}).warna || S.settings.accent;
+  else if (t.tipe === 'beli' || t.tipe === 'asetawal') wr = (asetByNama(t.nama) || {}).warna || S.settings.accent;
   else wr = '#eab308';
   const sub = aset ? ('Portofolio' + (t.catatan ? ' · ' + t.catatan : '')) : (t.lokasi + (t.catatan ? ' · ' + t.catatan : ''));
-  const cls = t.tipe === 'masuk' ? 'amount-pos' : (t.tipe === 'jual' ? 'amount-pos' : (t.tipe === 'beli' ? 'amount-blue' : 'amount-neg'));
+  const cls = t.tipe === 'masuk' ? 'amount-pos' : (t.tipe === 'jual' ? 'amount-pos' : (t.tipe === 'beli' || t.tipe === 'asetawal' ? 'amount-blue' : 'amount-neg'));
   return `<tr>
       <td><span class="kategori-txt"><span class="dot" style="background:${wr}"></span><span class="asset-name">${esc(nm)}</span></span><div class="asset-sub">${esc(sub)}</div></td>
       <td><span class="badge ${t.tipe}">${TIPE_LABEL[t.tipe]}</span></td>
@@ -973,7 +976,7 @@ function gantiNamaAset(id, nama){
   const item = S.aset.find(x => x.id === id);
   const lama = item.nama;
   item.nama = nama.trim() || lama;
-  S.transaksi.forEach(t => { if ((t.tipe === 'beli' || t.tipe === 'jual') && t.nama === lama) t.nama = item.nama; });
+  S.transaksi.forEach(t => { if ((t.tipe === 'beli' || t.tipe === 'jual' || t.tipe === 'asetawal') && t.nama === lama) t.nama = item.nama; });
   simpan(); render();
 }
 function gantiWarnaAset(id, warna){
