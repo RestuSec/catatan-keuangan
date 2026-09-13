@@ -1047,7 +1047,7 @@ function resetData(){
 }
 
 /* ============ SINKRONISASI CLOUD (FIREBASE) ============ */
-let fbApp = null, fbDb = null, fbSync = false;
+let fbApp = null, fbDb = null, fbSync = false, lastLocalWrite = 0;
 function fbNamaKunci(){ return S.settings.kode || acak(6); }
 function fbRef(){ return fbDb ? fbDb.ref('data/' + fbNamaKunci()) : null; }
 function statusFb(msg, ok){
@@ -1056,11 +1056,27 @@ function statusFb(msg, ok){
   s.innerHTML = (ok ? '✓ ' : '✕ ') + esc(msg);
   s.style.color = ok ? 'var(--green)' : 'var(--red)';
 }
+function payloadCloud(){
+  lastLocalWrite = Date.now();
+  const out = JSON.parse(JSON.stringify(S));
+  out.__w = lastLocalWrite;
+  return out;
+}
 function pushFirebase(){
   if (!fbDb || !fbSync) return;
-  // ponytail: seluruh state di-set sekali tiap simpan (last-write-wins).
-  // Kalau 2 perangkat sering edit barengan & saling timpa, upgrade ke per-record update.
-  fbRef().set(JSON.parse(JSON.stringify(S)));
+  // ponytail: seluruh state di-set sekali tiap simpan, ditandai waktu tulis.
+  // Data yang lebih lama tidak pernah menimpa yang lebih baru.
+  fbRef().set(payloadCloud());
+}
+// Terima data remote. Cuma diadopsi kalau lebih baru dari tulis lokal terakhir.
+function cekRemote(d){
+  if (!d || !d.transaksi) return;
+  const w = d.__w || 0;
+  if (lastLocalWrite > 0 && w <= lastLocalWrite) return;
+  const c = JSON.parse(JSON.stringify(d));
+  delete c.__w;
+  if (JSON.stringify(c) === JSON.stringify(S)) return;
+  S = normalizeD(c); simpan();
 }
 function initFirebase(cfg){
   if (!cfg || !cfg.apiKey || !cfg.databaseURL) throw new Error('Config kurang lengkap (butuh apiKey & databaseURL).');
@@ -1073,11 +1089,8 @@ function initFirebase(cfg){
   statusFb('Menghubungkan…');
   ref.once('value', snap => {
     const d = snap.val();
-    if (d && d.transaksi) {
-      if (JSON.stringify(d) !== JSON.stringify(S)) { S = normalizeD(d); simpan(); }
-    } else {
-      ref.set(JSON.parse(JSON.stringify(S)));
-    }
+    if (d && d.transaksi) cekRemote(d);
+    else ref.set(payloadCloud());
     fbSync = true;
     statusFb('Terhubung · sinkron realtime', true);
   }, err => {
@@ -1086,10 +1099,7 @@ function initFirebase(cfg){
   });
   ref.on('value', snap => {
     if (!fbSync) return;
-    const d = snap.val();
-    if (d && d.transaksi && JSON.stringify(d) !== JSON.stringify(S)) {
-      S = normalizeD(d); simpan();
-    }
+    cekRemote(snap.val());
   });
 }
 function disconnectFirebase(){
